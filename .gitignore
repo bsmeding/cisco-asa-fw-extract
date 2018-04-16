@@ -2,3 +2,4 @@
 /*.conf
 test*
 *backup*
+__pycache__
