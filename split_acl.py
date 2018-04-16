@@ -16,12 +16,14 @@ from ciscoconfparse.ccp_util import IPv4Obj
 
 
 PRINT_REMARKS = 0				# 1 for print to screen, other for not
-SPLIT_OBJECT_GROUPS = 1			# 1 to loop trough object-group and printout rows
-EXTRACT_OBJECT_GROUPS = 1		# 1 is extract all object-group to single output (nested groeps not visible), output to JSON will alway be nested
+SPLIT_OBJECT_GROUPS = True			# 1 to loop trough object-group and printout rows
+EXTRACT_OBJECT_GROUPS = True		# 1 is extract all object-group to single output (nested groeps not visible), output to JSON will alway be nested
+FLATTEN_NESTED_LISTS = True		# True if the output of nested lists must be extracted to one list
+
 
 OUTPUT_JSON_FILE = "split_acl.json"
 
-input_config_file = "interconnect.conf" 
+input_config_file = "ciscoconfig.conf" 
 
 # named tuples
 #interface = namedtuple('interface', 'namedif')
@@ -45,6 +47,10 @@ def is_ipv4(ip):
 	return True
 
 def get_acl_lines(parse, acl_name):
+	"""
+	Get ACL line by line and parse to split_acl_lines to analyse per word
+
+	"""
 	for acl_line in parse.find_objects(r'access-list\s'):
 		if acl_name in acl_line.text:
 			print("")
@@ -53,6 +59,16 @@ def get_acl_lines(parse, acl_name):
 			acl_line = acl_line.text.split(' ', 2)[2]
 			print(acl_line)
 			split_acl_lines(parse, acl_line)
+
+def flatten( alist ):
+	# Flatten nested list to one list
+     newlist = []
+     for item in alist:
+         if isinstance(item, list):
+             newlist = newlist + flatten(item)
+         else:
+             newlist.append(item)
+     return newlist
 
 def get_og_content(parse, og_name, og_type):
 	#parse = parseconfig(input_config_file)
@@ -69,8 +85,7 @@ def get_og_content(parse, og_name, og_type):
 			
 			og_item_words = og_item.split()
 			if og_item_words[0] != 'description' and og_item_words[0] != 'group-object' :
-				print(" " + og_item)
-				#print (og_item_words[1])
+				#print(" " + og_item)
 				# Check wether new object, group is used or valid IPv4 address
 				if is_ipv4(og_item_words[1]):
 					#print("Is IPv4 : " + og_item_words[1])
@@ -78,18 +93,23 @@ def get_og_content(parse, og_name, og_type):
 					og_IP_item = og_item_words[1] + " " + og_item_words[2]
 					#print(og_IP_item)
 					all_og_items.append(og_IP_item)
+				elif og_item_words[1] == 'host':
+					all_og_items.append(og_item_words[2] + "  255.255.255.255")
 				elif og_item_words[1] == 'object':
 					## get object items
-					og_item_object = get_object_content(parse, og_item_words[2], og_type)
+					#og_item_object = get_object_content(parse, og_item_words[2], og_type)
+					all_og_items.append(get_object_content(parse, og_item_words[2], og_type))
 				elif og_item_words[1] == 'network':
 					print("TODO NETWORK TYPE")
 				else:
 					print("ERROR: object-group type " + og_item_words[1] + " not found")
 			elif og_item_words[0] == 'group-object':
-				print(" " + og_item), 
+				#print(" " + og_item), 
 				#now check first word is 'group-object'
 				#print("GROUP-OBJECT")
 				all_og_items.append(get_og_content(parse, og_item_words[1], 'network'))
+	if FLATTEN_NESTED_LISTS == True:
+		all_og_items = flatten(all_og_items)
 	return all_og_items
 
 def get_object_content(parse, object_name, o_type):
@@ -97,15 +117,27 @@ def get_object_content(parse, object_name, o_type):
 	#og_types: protocol, network, service
 	# network-object 
 	indent_space = "     "
-	print("")
-	print(indent_space + "finding objects for " + object_name)
-	print("")
+	#print(indent_space + "finding objects for " + object_name)
+	#print("")
 	all_object_items = list()
 	if o_type == 'network':
-		o_items = parse.find_all_children('^object network '+ object_name + '', exactmatch=True)
+		o_items = iter(parse.find_all_children('^object network '+ object_name + '', exactmatch=True))
+		#skip first item
+		next(o_items)
 		for o_item in o_items:
-			print(indent_space + o_item)
-
+			o_item_words = o_item.split()
+			#print(indent_space + o_item)
+			if o_item_words[0] == 'subnet':
+				#print(o_item_words[1])
+				all_object_items.append(o_item_words[1] + " " + o_item_words[2])
+			elif o_item_words[0] == 'host':
+				all_object_items.append(o_item_words[1] + "  255.255.255.255")
+			elif o_item_words[0] == 'description':
+				o_item_desc = o_item[len("description "):]
+			else:
+				print("ERROR OBJECT " + o_item_words[0] +  " TYPE NOT FOUND")
+	else:
+		print("ERROR OBJECT TYPE " + o_type + " NOT SUPPORTED")
 
 	return all_object_items
 
@@ -169,8 +201,7 @@ def split_acl_lines(parse, acl_line):
 		if acl_source_sn == 'object-group':
 			acl_source_in_og = True
 			acl_source_og = get_acl_line_word(acl_line, acl_src_ip_section+1)
-			#get OG items for NETWORK type
-			acl_source_og_items = get_og_content(parse, acl_source_og, 'network')
+			acl_source_og_items = get_og_content(parse, acl_source_og, 'network')				# CHECK IF NETWORK VARIABLE SET
 		elif acl_source_sn == 'host':
 			## Next item is host IP and not subnetmask. We generate default subnetmask
 			acl_source_sn = get_acl_line_word(acl_line, acl_src_sn_section)
@@ -192,6 +223,7 @@ def split_acl_lines(parse, acl_line):
 		if acl_dst_sn == 'object-group':
 			acl_dst_in_og = True
 			acl_dst_og = get_acl_line_word(acl_line, acl_dst_ip_section+1)
+			acl_dst_og_items = get_og_content(parse, acl_dst_og, 'network')						# CHECK IF NETWORK VARIABLE SET
 		elif acl_dst_sn == 'host':
 			## Next item is host IP and not subnetmask. We generate default subnetmask
 			acl_dst_sn = get_acl_line_word(acl_line, acl_dst_sn_section)
@@ -212,7 +244,7 @@ def split_acl_lines(parse, acl_line):
 		print("acl_action : " + acl_action)
 		if (acl_protocols_in_og):
 			print("acl_protocol_og: " + acl_protocol_og)
-			if SPLIT_OBJECT_GROUPS == 1:
+			if SPLIT_OBJECT_GROUPS == True:
 				print(indent_space + "og_objects:")
 		else:
 			print("acl_protocol : " + acl_protocol)
@@ -220,8 +252,10 @@ def split_acl_lines(parse, acl_line):
 		print("******* SOURCE: *******")
 		if acl_source_og != '':
 			print("acl_source_og : " + acl_source_og)
-			if SPLIT_OBJECT_GROUPS == 1:
-				print(indent_space + "og_objects:")
+			if SPLIT_OBJECT_GROUPS == True:
+				#convert list to string for print
+				str_acl_source_og_items = '\n        '.join(map(str, acl_source_og_items))
+				print(indent_space + "og_objects:" + str_acl_source_og_items)
 
 		else:
 			print("acl_source_sn : " + acl_source_sn)
@@ -229,12 +263,13 @@ def split_acl_lines(parse, acl_line):
 		print("****** DESTINATION: ******")
 		if acl_dst_og != '':
 			print("acl_dst_og : " + acl_dst_og)
-			if SPLIT_OBJECT_GROUPS == 1:
+			if SPLIT_OBJECT_GROUPS == True:
 				print(indent_space + "og_objects:")
 		else:
 			print("acl_dst_sn : " + acl_dst_sn)
 			print("acl_dst_nm : " + acl_dst_nm) 
 		print("******** PORTS: ********")
+
 
 
 
@@ -245,12 +280,15 @@ def main():
 	pprint(parse)
 	print("")
 
-#	print("      get ACL info")
-#	get_acl_lines(parse, "Interconnect_access_in")
+	print("      get ACL info")
+	get_acl_lines(parse, "Interconnect_access_in")
 
 
-	acl_source_og = "BNS_Beheer_Segment"
-	acl_source_og_items = get_og_content(parse, acl_source_og, 'network')
+#	acl_source_og = "BNS_Beheer_Segment"
+#	acl_source_og_items = get_og_content(parse, acl_source_og, 'network')
+#	if FLATTEN_NESTED_LISTS == True:
+#		acl_source_og_items = flatten(acl_source_og_items)
+
 	print("")
 	pprint(acl_source_og_items)
 
