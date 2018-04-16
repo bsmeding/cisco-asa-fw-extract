@@ -1,3 +1,4 @@
 *.conf
 /*.conf
 test*
+*backup*
