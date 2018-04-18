@@ -97,7 +97,7 @@ def get_og_content(parse, og_name, og_type):
 	#og_types: protocol, network, service
 	# network-object 
 	all_og_items = list()
-	if og_type == 'network' or og_type == 'service':
+	if og_type == 'network' or og_type == 'service' or og_type == 'service-po':
 		#print("NETWORK OBJECTS :" + og_name)
 		try:
 			og_items = iter(parse.find_all_children('object-group '+ og_type +' '+ og_name, exactmatch=True))
@@ -126,8 +126,8 @@ def get_og_content(parse, og_name, og_type):
 						elif og_item_words[1] == 'network':
 							print("TODO NETWORK TYPE")
 						else:
-							raise ValidationError("ERROR: object-group type " + og_item_words[1] + " not found", "get_og_content")
-							print("ERROR: object-group type " + og_item_words[1] + " not found")
+							raise ValidationError("ERROR: object-group type " + og_item_words[1] + " not found" + og_type, "get_og_content")
+							print("ERROR: object-group type " + og_item_words[1] + " not found" + og_type)
 					elif og_item_words[0] == 'group-object':
 						#print(" " + og_item), 
 						#now check first word is 'group-object'
@@ -144,11 +144,25 @@ def get_og_content(parse, og_name, og_type):
 						elif og_item_words[1] == 'udp':		# Service type udp
 							print("TODO UDP")
 						else:
-							raise ValidationError("ERROR: object-group type " + og_item_words[1] + " not found", "get_og_content")
-							print("ERROR: object-group type " + og_item_words[1] + " not found")
+							raise ValidationError("ERROR: object-group type " + og_item_words[1] + " not found" + og_type, "get_og_content")
+							print("ERROR: object-group type " + og_item_words[1] + " not found" + og_type)
 					elif og_item_words[0] == 'group-object':
 						# nested group - loop till end
 						all_og_items.append(get_og_content(parse, og_item_words[1], og_type))
+				# Type = service-po (OG in end for destination ports)
+				elif og_type == 'service-po':
+					if og_item_words[0] == 'port-object':
+						# we have icmp, tcp or udp service-objects
+						if og_item_words[1] == 'eq':			# one port is
+							print("ONE PORT")
+						elif og_item_words[1] == 'range':		# port-object range loop all items
+							print("PORT RANGE")
+						else:
+							raise ValidationError("ERROR: object-group type " + og_item_words[1] + " not found" + og_type, "get_og_content")
+							print("ERROR: object-group type " + og_item_words[1] + " not found in " + og_type)
+					elif og_item_words[0] == 'group-object':
+						# nested group - loop till end
+						all_og_items.append(get_og_content(parse, og_item_words[1], og_type))						
 		except:
 			print("ERROR: Object-group not found!")
 
@@ -165,8 +179,7 @@ def get_object_content(parse, object_name, o_type):
 	#og_types: protocol, network, service
 	# network-object 
 	indent_space = "     "
-	#print(indent_space + "finding objects for " + object_name)
-	#print("")
+	# Create empyt list
 	all_object_items = list()
 	if o_type == 'network' or o_type == 'service':
 		o_items = iter(parse.find_all_children('^object '+ o_type + ' ' + object_name + '', exactmatch=True))
@@ -251,6 +264,7 @@ def split_acl_lines(parse, acl_line):
 	acl_dst_nm = ''
 	acl_dst_og = ''
 	acl_dst_ports_in_og = False 	
+	acl_dst_ports_og = ''
 	acl_dst_ports = ''
 
 	# define empty variables
@@ -331,8 +345,14 @@ def split_acl_lines(parse, acl_line):
 			if acl_port_first == 'range':
 				# if range, loop trough words return list, start with first word
 				acl_dst_ports = get_acl_dst_port_range(acl_line, acl_port_section+1)
-
 			# if first wordt is 'object-range' a group (of groups) will follow
+			if acl_port_first == 'object-group':
+				acl_dst_ports_in_og = True
+				acl_dst_ports_og = get_acl_line_word(acl_line, acl_port_section+1)
+				acl_dst_ports_og_items = get_og_content(parse, acl_dst_ports_og, 'service-po')
+				print("ACL DST PORTS ITEMS"), acl_dst_ports_og_items
+				# CREATE EXTRA CHECK THAT THE OG HAVE SAME PROTOCOL MATCHING? NEED TO CHANGE function
+				
 
 			# if word is time-range followed by time setting. This is a temporary rule
 
@@ -366,16 +386,28 @@ def split_acl_lines(parse, acl_line):
 				#convert list to string for print
 				str_acl_dst_og_items = '\n        '.join(map(str, acl_dst_og_items))
 				print(indent_space + "og_objects:" + str_acl_dst_og_items)
+			else:
+				print(indent_space + "og_objects:" + acl_dst_og_items)
 		else:
 			print("acl_dst_sn : " + acl_dst_sn)
 			print("acl_dst_nm : " + acl_dst_nm) 
-		if acl_port_words > 0:
+		
+		# DESTINATION PORTS
+		if acl_dst_ports_og != '':
+			print("******** PORTS: ********")
+			print("acl_dst_ports_og : " + acl_dst_ports_og) 
+			if SPLIT_OBJECT_GROUPS == True:
+				#convert list to string for print
+				str_acl_dst_ports_og_items = '\n        '.join(map(str, acl_dst_ports_og_items))
+				print(indent_space + "og_objects:" + str_acl_dst_ports_og_items)
+			else:
+				print(indent_space + "og_objects:" + acl_dst_ports_og_items)
+		elif acl_dst_ports_og == '' and acl_port_words > 0:
 			print("******** PORTS: ********")
 			print("PORT(S) :"), acl_dst_ports
-			print("ACL WOORDEN"), acl_length
-			print("WOORDEN VOOR PORTS "), acl_port_words
+
 		else:
-			print("NO PORTS IN ACL - SEE SERVICE GROUP")
+			print("NO PORTS IN DESTINATION ACL - SEE SERVICE GROUP FOR 2-WAY PORTS")
 
 
 
