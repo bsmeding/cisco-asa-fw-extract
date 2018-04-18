@@ -15,13 +15,15 @@ from ciscoconfparse.ccp_util import IPv4Obj
 
 
 
-PRINT_REMARKS = 0				# 1 for print to screen, other for not
-SPLIT_OBJECT_GROUPS = True			# 1 to loop trough object-group and printout rows
-EXTRACT_OBJECT_GROUPS = True		# 1 is extract all object-group to single output (nested groeps not visible), output to JSON will alway be nested
+PRINT_REMARKS = False			# True for print to screen, False no print to screen
+SKIP_REMARKS = True 			# Skip the remark lines in export output
+SPLIT_OBJECT_GROUPS = True		# 1 to loop trough object-group and printout rows
+EXTRACT_OBJECT_GROUPS = True	# True is extract all object-group to single output (nested groeps not visible), output to JSON will alway be nested
 FLATTEN_NESTED_LISTS = True		# True if the output of nested lists must be extracted to one list
+SKIP_INACTIVE = True			# True to skip lines that are inactie (last word of ACL line)
+SKIP_TIME_EXCEEDED = True		# Skip rules with time-ranges that have passed by
 
-
-OUTPUT_JSON_FILE = "split_acl.json"
+#OUTPUT_JSON_FILE = "split_acl.json"
 
 input_config_file = "ciscoconfig.conf" 
 
@@ -46,20 +48,6 @@ def is_ipv4(ip):
 			return False
 	return True
 
-def get_acl_lines(parse, acl_name):
-	"""
-	Get ACL line by line and parse to split_acl_lines to analyse per word
-
-	"""
-	for acl_line in parse.find_objects(r'access-list\s'):
-		if acl_name in acl_line.text:
-			print("")
-			print(acl_line.linenum), ":", 
-			#split line
-			acl_line = acl_line.text.split(' ', 2)[2]
-			print(acl_line)
-			split_acl_lines(parse, acl_line)
-
 def flatten( alist ):
 	# Flatten nested list to one list
      newlist = []
@@ -69,6 +57,29 @@ def flatten( alist ):
          else:
              newlist.append(item)
      return newlist
+
+
+
+def get_acl_lines(parse, acl_name):
+	"""
+	Get ACL line by line and parse to split_acl_lines to analyse per word
+
+	"""
+	for acl_line in parse.find_objects(r'access-list\s'):
+		if acl_name in acl_line.text:
+			print("")
+			acl_line_number = acl_line.linenum
+			acl_line = acl_line.text.split(' ', 2)[2]
+			# FILTER OUT LINES
+			# First check if remark or ACL type
+			#print("ACL 6 (remark): " + acl_line.partition(' ')[0]) 	
+			if (acl_line.partition(' ')[0] == 'remark' and PRINT_REMARKS == True ) or acl_line.partition(' ')[0] == 'extended':
+				print(acl_line_number), ":",
+				print(acl_line)
+				if (acl_line.partition(' ')[0] == 'remark' and SKIP_REMARKS == False ) or acl_line.partition(' ')[0] == 'extended':
+					# Go further and split ACL
+					split_acl_lines(parse, acl_line)
+			
 
 def get_og_content(parse, og_name, og_type):
 	#parse = parseconfig(input_config_file)
@@ -148,8 +159,19 @@ def get_acl_line_word(acl_line, word_nr):
 
 def split_acl_lines(parse, acl_line):	
 	acl_length = len(acl_line.split())
-	acl_words = acl_line.split()
 	indent_space = "     "
+	acl_words = acl_line.split()
+	# FILTER LINES, DONT PROCESS FURTHER
+	skip_this_line = False
+	if SKIP_INACTIVE == True and (get_acl_line_word(acl_line, acl_length) == 'inactive'):
+		skip_this_line = True
+		print("SKIPPED! Inactive")
+	# Check if a time filter is used and is exceeded
+	if SKIP_TIME_EXCEEDED == True and (get_acl_line_word(acl_line, acl_length-1) == 'time-range'):
+		skip_this_line = True
+		# RUN FUNCTION TO CHECK TIME AND RETURN SKIP TRUE OR FALSE
+		print("SKIPPED! time-range exceeded")
+	# END FILTER
 	# Set default section names in ACL row (space seperated) they can change based on object-groups
 	acl_type_section = 1
 	acl_action_section = 2
@@ -179,7 +201,7 @@ def split_acl_lines(parse, acl_line):
 
 	# define empty variables
 	acl_type = get_acl_line_word(acl_line, acl_type_section)
-	if acl_type != 'remark':
+	if acl_type != 'remark' and not skip_this_line:
 		acl_action = get_acl_line_word(acl_line, acl_action_section)
 		
 		acl_protocol = get_acl_line_word(acl_line, acl_protocol_section)
@@ -238,8 +260,36 @@ def split_acl_lines(parse, acl_line):
 			acl_dst_in_og = False
 			acl_dst_nm = get_acl_line_word(acl_line, acl_dst_sn_section)
 
+		# Get port settings
+		#how many words
+		acl_port_words = acl_length - acl_port_section
+		# can be negative, only process further when positive
+		if acl_port_words > 0:
+			acl_total_port_words = acl_port_words + acl_port_section
+			acl_port_first = get_acl_line_word(acl_line, acl_port_section)
+			# debug print all words:
+			#for i in range(acl_port_section, acl_total_port_words+1):
+			#	print("PORTS_ACL_WORD "), i,
+			#	print(" : " + get_acl_line_word(acl_line, i))
+			if acl_port_first == 'eq':
+			# if first wordt is 'eq' one port will follow
+				print("port match is 1 port")
+				#acl_port_used =
 
-	if acl_type != 'remark':
+			# if first wordt is 'range' couple of words/ports will follow, space seperated
+			if acl_port_first == 'range':
+			# if first wordt is 'eq' one port will follow
+				print("port match is range of ports")
+				#acl_port_used =
+
+
+			# if first wordt is 'object-range' a group (of groups) will follow
+
+			# if word is time-range followed by time setting. This is a temporary rule
+
+
+	# PRINT 
+	if acl_type != 'remark' and not skip_this_line:
 		print("acl_type : " + acl_type)
 		print("acl_action : " + acl_action)
 		if (acl_protocols_in_og):
@@ -264,11 +314,18 @@ def split_acl_lines(parse, acl_line):
 		if acl_dst_og != '':
 			print("acl_dst_og : " + acl_dst_og)
 			if SPLIT_OBJECT_GROUPS == True:
-				print(indent_space + "og_objects:")
+				#convert list to string for print
+				str_acl_dst_og_items = '\n        '.join(map(str, acl_dst_og_items))
+				print(indent_space + "og_objects:" + str_acl_dst_og_items)
 		else:
 			print("acl_dst_sn : " + acl_dst_sn)
 			print("acl_dst_nm : " + acl_dst_nm) 
-		print("******** PORTS: ********")
+		if acl_port_words > 0:
+			print("******** PORTS: ********")
+			print("ACL WOORDEN"), acl_length
+			print("WOORDEN VOOR PORTS "), acl_port_words
+		else:
+			print("NO PORTS IN ACL - SEE SERVICE GROUP")
 
 
 
@@ -289,8 +346,8 @@ def main():
 #	if FLATTEN_NESTED_LISTS == True:
 #		acl_source_og_items = flatten(acl_source_og_items)
 
-	print("")
-	pprint(acl_source_og_items)
+	#print("")
+	#pprint(acl_source_og_items)
 
 if __name__ == "__main__":
 	main()

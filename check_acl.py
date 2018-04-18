@@ -82,7 +82,7 @@ def split_acl_lines(acl_line):
 def main():
 	print("Read config file")
 
-	parse = parseconfig("interconnect.conf")
+	parse = parseconfig("ciscoconfig.conf")
 	pprint(parse)
 	print("")
 
