@@ -3,14 +3,8 @@
 import os
 import sys
 import re
-#import getpass
-#import time
 from pprint import pprint
 from ciscoconfparse import CiscoConfParse
-from ciscoconfparse.ccp_util import IPv4Obj
-from collections import namedtuple
-
-interface = namedtuple('interface', 'namedif')
 
 def parseconfig(filename):
 	return CiscoConfParse(filename)
@@ -31,10 +25,8 @@ def get_acl_in(parse, nameif):
 	#active_acls = parse.find_objects(r'accesss-group\s+(.*)\s+in\s+interface')
 	for acl in parse.find_objects(r'access-group\s'):
 		#print(acl)
-		if nameif in acl.text:
-			match = re.search(r"in interface (.*)$", nameif)
-			#print(" ***** Match op " + acl.text)
-			#acl_name = acl.text[len("access-group "):]
+		if nameif in acl.text and 'in interface' in acl.text:
+			#print(acl.text)
 			acl_name = acl.text
 			acl_name = acl_name.split(' ', 2)[1]
 			#print(acl_name)
@@ -44,10 +36,8 @@ def get_acl_out(parse, nameif):
 	#active_acls = parse.find_objects(r'accesss-group\s+(.*)\s+in\s+interface')
 	for acl in parse.find_objects(r'access-group\s'):
 		#print(acl)
-		if nameif in acl.text:
-			match = re.search(r"out interface (.*)$", nameif)
-			#print(" ***** Match op " + acl.text)
-			#acl_name = acl.text[len("access-group "):]
+		if nameif in acl.text and 'out interface' in acl.text:
+			#print(acl.text)
 			acl_name = acl.text
 			acl_name = acl_name.split(' ', 2)[1]
 			#print(acl_name)
@@ -97,24 +87,28 @@ def main():
 		# search for the nameif 
 		for cmd in intf_obj.re_search_children(r"^ nameif "):
 			intf_nameif = cmd.text.strip()[len("nameif "):] 
-        	print(" nameif " + intf_nameif)
+			print(" nameif " + intf_nameif)
 
-        	# Get incoming ACL
-        	print(" **** searching for incoming ACL for interface " + intf_nameif) + ": ", 
-        	incoming_acl = get_acl_in(parse, intf_nameif)
-	    	print(incoming_acl)
+			# Get incoming ACL
+			print(" **** searching for incoming ACL for interface " + intf_nameif) + ": ", 
+			incoming_acl = get_acl_in(parse, intf_nameif)
+		
+			if incoming_acl != None:
+				print("ACL IN : "),
+				print(incoming_acl)
+				#get_acl_lines(parse, incoming_acl)
+			else:
+				print(" no incoming ACL active!")
 
-	    	if incoming_acl != None:
-	    		print("      get ACL info")
-	    		get_acl_lines(parse, incoming_acl)
+			print(" **** searching for outgoing ACL for interface " + intf_nameif) + ": ", 
+			outgoing_acl = get_acl_out(parse, intf_nameif)
 
-
-
-			# Get outgoingACL
-        	print(" **** searching for outgoing ACL for interface " + intf_nameif) + ": ", 
-        	outgoing_acl = get_acl_out(parse, intf_nameif)
-	    	print(outgoing_acl)
-
+			if outgoing_acl != None:
+				# Get outgoingACL
+				print("ACL OUT : "),
+				print(outgoing_acl)
+			else:
+				print(" no outging ACL active!")
 
 
 
