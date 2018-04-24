@@ -15,6 +15,12 @@ from ciscoconfparse import CiscoConfParse
 #import cidr_convert
 import csv 						# CSV Export 
 
+# Import ipaddress library based on Python version (2.x of 3.2 = ipaddr >3.2 ipaddres) used to calculate ip addresses in range
+try:
+    from ipaddress import ip_address
+except ImportError:
+    from ipaddr import IPAddress as ip_address
+
 #Check Python version
 if sys.version_info[0] >= 3:
 	python3 = True
@@ -23,16 +29,16 @@ else:
 
 
 PRINT_REMARKS = False			# True for print to screen, False no print to screen
-PRINT_OUTPUT = False 			# Print to screen - default False
-EXPORT_REMARKS = False 			# Skip the remark lines in export output
-#EXPORT_ACL_LINE = True   		# Export the original ACL line, when exporting to CSV not recommended ad filtering will be difficult
+PRINT_OUTPUT = True 			# Print to screen - default False
+EXPORT_REMARKS = True 			# Skip the remark lines in export output
 SPLIT_OBJECT_GROUPS = True		# 1 to loop trough object-group and printout rows
 EXTRACT_OBJECT_GROUPS = True	# True is extract all object-group to single output (nested groeps not visible), output to JSON will alway be nested
 FLATTEN_NESTED_LISTS = True		# True if the output of nested lists must be extracted to one list
 SKIP_INACTIVE = True			# True to skip lines that are inactie (last word of ACL line)
-SKIP_TIME_EXCEEDED = True		# Skip rules with time-ranges that have passed by
+SKIP_TIME_EXCEEDED = False		# Skip rules with time-ranges that have passed by
 EXTEND_PORT_RANGES = True 		# When True the ranges will be added seperataly, from begin to end range port
 debug = False
+CREATE_DICT = True
 
 """
 ToDo:
@@ -40,6 +46,15 @@ ToDo:
 * Validate processed items: first count ACL rows, compare at end with processed rows (count: remark, skipped + processed)
 * Add function to validate next hop, and add to export
 * find unused object-groups (only really unused, from inactive ACLs must remain in config )
+
+	# VALIDATE INFO
+	# Check : 
+	# - IP address validation in Source - Destination
+	# - Protocol check
+	# - Port check
+	# - No Service-Group names in output
+	#
+	# ToDo Validation
 """
 
 #OUTPUT_JSON_FILE = "split_acl.json"
@@ -47,8 +62,6 @@ ToDo:
 #input_config_file = "confsmall.conf" 
 input_config_file = "ciscoconfig.conf" 
 
-# named tuples
-#interface = namedtuple('interface', 'namedif')
 
 
 def parseconfig(filename):
@@ -101,139 +114,168 @@ def is_obj_string(obj):
 			return False
 
 
+
 def get_acl_lines(parse, acl_name):
 	"""
 	Get ACL line by line and parse to split_acl_lines to analyse per word
 
 	"""
+	total_acl_lines = 0
+	parsed_remark_lines = 0
+	parsed_acl_lines = 0
+	parsed_unknown_lines = 0
+
+	# Create ympty Dictionary for export
+	acl_line_dict = dict()
+
 	for acl_line in parse.find_objects(r'access-list\s'):
+		
 		if acl_name in acl_line.text:
+			total_acl_lines = total_acl_lines + 1
 			acl_line_number = acl_line.linenum
 			acl_line = acl_line.text.split(' ', 2)[2]
+			
 			# First check if remark or ACL type
-			if (acl_line.partition(' ')[0] == 'remark' and PRINT_REMARKS == True ) or acl_line.partition(' ')[0] == 'extended':
-				print(acl_line_number), ":",
-				print(acl_line)
-				if (acl_line.partition(' ')[0] == 'remark' and EXPORT_REMARKS == True ) or acl_line.partition(' ')[0] == 'extended':
+			if acl_line.partition(' ')[0] == 'remark':
+				parsed_remark_lines = parsed_remark_lines + 1
+				if PRINT_REMARKS == True:
+					print(acl_line_number), ":",
+					print(acl_line)
+				if EXPORT_REMARKS == True:
 					# Go further and split ACL
-					split_acl_lines(parse, acl_line)
+					new_acl_dict_line = split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number)
+					acl_line_dict[total_acl_lines] = new_acl_dict_line
+					# Add original row
+					
+					acl_line_dict[total_acl_lines].update({'original_acl_line': acl_line})
+
+					
+			elif acl_line.partition(' ')[0] == 'extended':
+				parsed_acl_lines = parsed_acl_lines + 1
+				print(acl_line_number), ":",				
+				new_acl_dict_line = split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number)
+				acl_line_dict[total_acl_lines] = new_acl_dict_line
+				acl_line_dict[total_acl_lines].update({'original_acl_line': acl_line})
+			else:
+				parsed_unknown_lines = parsed_unknown_lines + 1
+				print("ERROR! Unkown ACL type!")
+
+	# Export Dictionary to CSV
+	if acl_line_dict != '':
+		#print("EXPORT TO CSV")
+		#pprint(acl_line_dict)
+		csv_columns = ['acl_line_number', 'inactive', 'acl_type', 'acl_action', \
+			'acl_protocol_og', 'acl_protocol_og_list', 'acl_source_og', \
+			'acl_source_og_list', 'acl_source_sn', 'acl_source_nm', \
+			'acl_dst_og', 'acl_dst_og_list', 'acl_dst_sn', \
+			'acl_dst_nm', 'acl_dst_ports_og', 'acl_dst_ports', 'original_acl_line']
+
+		with open('acl_lines_'+acl_name+'.csv', 'wb') as csv_file:
+			writer = csv.writer(csv_file)
+			writer.writerow(csv_columns)
+			for key, item in acl_line_dict.items():
+				# Extract values to one line and write
+				writer.writerow([item[u'acl_line_number'], item[u'inactive'], item[u'acl_type'], item[u'acl_action'], \
+					item[u'acl_protocol_og'], item[u'acl_protocol_og_list'], item[u'acl_source_og'], \
+					item[u'acl_source_og_list'], item[u'acl_source_sn'], item[u'acl_source_nm'], \
+					item[u'acl_dst_og'], item[u'acl_dst_og_list'], item[u'acl_dst_sn'], \
+					item[u'acl_dst_nm'], item[u'acl_dst_ports_og'], item[u'acl_dst_ports'], item[u'original_acl_line'] \
+					])
+
+	return (total_acl_lines, parsed_remark_lines, parsed_acl_lines, parsed_unknown_lines)
 			
 
 def get_og_content(parse, og_name, og_type):
-	#parse = parseconfig(input_config_file)
-	#og_types: protocol, network, service
-	# network-object 
-
+	all_og_items_return = dict()
 	og_rows_processed = 0
-	#if og_type == 'network' or og_type == 'service' or og_type == 'service-po':
-	if og_type == 'network' or og_type == 'service':
+	# Get flattened list of items (nested groups splitted-out)
+	og_items = list_all_object_group_items(parse, og_name, og_type)
+	for og_item in og_items:
+		og_rows_processed = og_rows_processed + 1
 		if (debug):
-			print("OBJECT-GROUP CONTENT : object-group " + og_type.strip() +" " + og_name.strip())
-		try:
-			og_items = iter(parse.find_all_children('object-group '+ og_type.strip() +' '+ og_name.strip(), exactmatch=True))
-			#itercars = iter(cars)
-			next(og_items)
-		except:
-			#Try an protocol object group with same name, some service- OG (beginning ACL) have reference to protocol only
-			try:
-				og_items = iter(parse.find_all_children('object-group protocol '+ og_name.strip(), exactmatch=True))
-				#itercars = iter(cars)
-				next(og_items)
-			except:
+			print("OG_ROW_PROCESSING : "), og_rows_processed
+		og_item_words_total = len(og_item.split())
+		og_item_words = og_item.split()
+		og_dst_ports = ''	
+		new_dict_line = ''
+
+		if og_type == 'network':
+			if og_item_words[0] != 'description' and og_item_words[0] != 'group-object' :
+				# Check wether new object, group is used or valid IPv4 address
+				if is_ipv4(og_item_words[1]):
+					# 2nd and 3rd word are subnet and netmask
+					new_dict_line = {'host_id': og_item_words[1], 'subnet': og_item_words[2]}
+					all_og_items_return[og_rows_processed] = new_dict_line	
+				elif og_item_words[1] == 'host':
+					new_dict_line = {'host_id': og_item_words[2], 'subnet': '255.255.255.255'}
+					all_og_items_return[og_rows_processed] = new_dict_line	
+					#all_og_items.append(og_item_words[2] + " 255.255.255.255")
+				elif og_item_words[1] == 'object':
+					#if (debug):
+					#print("SEARCHING FOR OBJECT")
+					## get object items
+					object_content = dict()
+					object_content = get_object_content(parse, og_item_words[2], og_type)
+					sub_key = 0
+					for key, item in object_content.items():
+						#print key, item
+						new_dict_line = {'host_id': item[u'host_id'], 'subnet': item[u'subnet']}
+						all_og_items_return[og_rows_processed, int(key)] = new_dict_line	
+					#all_og_items.append(get_object_content(parse, og_item_words[2], og_type))
+				elif og_item_words[1] == 'network':
+					print("ERROR : TODO NETWORK TYPE" + og_item)
+				else:
+					raise ValidationError("ERROR: object-group type " + og_item_words[1] + " not found" + og_type, "get_og_content")
+					print("ERROR: object-group type " + og_item_words[1] + " not found" + og_type)
+
+			# Return Dict
+			#new_dict_line = {'host_id': og_item_words[1], 'subnet': og_dst_ports}
+
+				all_og_items_return[og_rows_processed] = new_dict_line	
+		elif  og_type == 'service' or og_type == 'icmp':
+			if og_item_words[1] == 'icmp':		# Service type icmp
+				#Type ICMP possible
+				if og_item_words_total > 2:
+					og_dst_ports = og_item_words[2]
+				#if no extra words in service-object than both directions are allowed
+					new_dict_line = {'protocol': og_item_words[1], 'destination_port': og_dst_ports}
+					all_og_items_return[og_rows_processed] = new_dict_line
+			elif og_item_words[1] == 'tcp' or og_item_words[1] == 'udp' or og_item_words[1] == 'tcp-udp':		# Service type tcp/udp
+				#check if one port or range
+				if og_item_words_total > 2:
+					if og_item_words[2] == 'destination' and  og_item_words[3] == 'eq': 
+						og_dst_ports = og_item_words[4]
+					elif og_item_words[2] == 'destination' and  og_item_words[3] == 'range': 
+						# Range have two inputs, start and beginning
+						og_dst_ports = og_item_words[4] + '-' + og_item_words[5]
+					new_dict_line = {'protocol': og_item_words[1], 'destination_port': og_dst_ports}
+					all_og_items_return[og_rows_processed] = new_dict_line									
+				else:
+					# Probably no extra words
+					og_dst_ports = ''
+					new_dict_line = {'protocol': og_item_words[1], 'destination_port': og_dst_ports}
+					all_og_items_return[og_rows_processed] = new_dict_line
+
+			elif og_item_words[0] == 'port-object' and og_item_words[0] != 'description' and og_item_words[0] != 'group-object':
+				# we have icmp, tcp or udp service-objects
+				if og_item_words[1] == 'eq':			# one port is
+					og_dst_ports = og_item_words[2]
+				elif og_item_words[1] == 'range':		# port-object range loop all items
+					og_dst_ports = og_item_words[2] + '-' + og_item_words[3]
+				else:
+					raise ValidationError("ERROR: port-group type " + og_item_words[1] + " not found for type " + og_type, "get_og_content")
+					print("ERROR: object-group type " + og_item_words[1] + " not found in " + og_type)							
 				
-				print("ERROR: Object-group " + og_name.strip() + " not found for type " + og_type)
-	if og_items != '':
-		if og_type == 'service':
-			all_og_items = {}
-		else:
-			all_og_items = list()
-		# Loop trough items 
-		for og_item in og_items:
-			og_rows_processed = og_rows_processed + 1
-			if (debug):
-				print("OG_ROW_PROCESSING : "), og_rows_processed
-			og_item_words_total = len(og_item.split())
-			og_item_words = og_item.split()
-			og_dst_ports = ''
-
-			## NETWORK OG
-			if og_type == 'network':
-				if og_item_words[0] != 'description' and og_item_words[0] != 'group-object' :
-					# Check wether new object, group is used or valid IPv4 address
-					if is_ipv4(og_item_words[1]):
-						# 2nd and 3rd word are subnet and netmask
-						og_IP_item = og_item_words[1] + " " + og_item_words[2]
-						all_og_items.append(og_IP_item)
-					elif og_item_words[1] == 'host':
-						all_og_items.append(og_item_words[2] + "  255.255.255.255")
-					elif og_item_words[1] == 'object':
-						if (debug):
-							print("SEARCHING FOR OBJECT")
-						## get object items
-						all_og_items.append(get_object_content(parse, og_item_words[2], og_type))
-					elif og_item_words[1] == 'network':
-						print("TODO NETWORK TYPE")
-					else:
-						raise ValidationError("ERROR: object-group type " + og_item_words[1] + " not found" + og_type, "get_og_content")
-						print("ERROR: object-group type " + og_item_words[1] + " not found" + og_type)
-				elif og_item_words[0] == 'group-object':
-					# Loop trough nested groups
-					all_og_items.append(get_og_content(parse, og_item_words[1], og_type))
-			# Type = service (OG in beginngin of ACL)
-			elif og_type == 'service':
-				#FIRST CHECK IF SERVICE GROUP OR PORT-OBJECT-GROUP
-				# NEEDS TO BE ADDED THE SERVICE TYPES SEE : https://www.cisco.com/c/en/us/td/docs/security/asa/asa83/configuration/guide/config/ref_ports.html#wpxref39421
-				if og_item_words[0] == 'service-object' and og_item_words[0] != 'description':
-					if (debug):
-						print("SERVICE-OBJECT "), og_item_words[1]
-					
-					# we have icmp, tcp or udp service-objects
-					# for every different in protocol a new ACL Line is needed!!
-					if og_item_words[1] == 'icmp':		# Service type icmp
-						#Type ICMP possible
-						if og_item_words_total > 2:
-							og_dst_ports = og_item_words[2]
-						#if no extra words in service-object than both directions are allowed
-						
-					elif og_item_words[1] == 'tcp' or og_item_words[1] == 'udp' or og_item_words[1] == 'tcp-udp':		# Service type tcp
-						#check if one port or range
-						if og_item_words[2] == 'destination' and  og_item_words[3] == 'eq': 
-							og_dst_ports = og_item_words[4]
-						elif og_item_words[2] == 'destination' and  og_item_words[3] == 'range': 
-							# Range have two inputs, start and beginning
-							og_dst_ports = og_item_words[4] + '-' + og_item_words[5]
-
-					#else:
-					#	raise ValidationError("ERROR: service-group type " + og_item_words[1] + " not found for type " + og_type, "get_og_content")
-					#	print("ERROR: object-group type " + og_item_words[1] + " not found" + og_type)
-				elif og_item_words[0] == 'port-object' and og_item_words[0] != 'description' :
-					# we have icmp, tcp or udp service-objects
-					if og_item_words[1] == 'eq':			# one port is
-						og_dst_ports = og_item_words[2]
-					elif og_item_words[1] == 'range':		# port-object range loop all items
-						og_dst_ports = og_item_words[2] + '-' + og_item_words[3]
-					else:
-						raise ValidationError("ERROR: port-group type " + og_item_words[1] + " not found for type " + og_type, "get_og_content")
-						print("ERROR: object-group type " + og_item_words[1] + " not found in " + og_type)							
-				elif og_item_words[0] == 'group-object':
-					print("NESTED SERVICE GROUP FOUND!!!!")
-					# nested group - loop till end
-					# NEEDS TO BE CORRECTED FOR SERVICE-GROUPS!!
-					#og_dst_ports.append(get_og_content(parse, og_item_words[1], og_type))
-
-				# UPDATE DICTIONARY
 				new_dict_line = {'protocol': og_item_words[1], 'destination_port': og_dst_ports}
-				all_og_items[og_rows_processed] = new_dict_line
-				#all_og_items = new_dict_line
-				
+				all_og_items_return[og_rows_processed] = new_dict_line
 
-	if FLATTEN_NESTED_LISTS == True and og_type != 'service':
-		all_og_items = flatten(all_og_items)
-	
-	if (debug):
-		print ("RETURN OG_CONTENT FUNCTION : ")
-		print(all_og_items)
-	return all_og_items
+
+
+	#for key, item in all_og_items_return.items():
+	#	print key, item
+
+
+	return all_og_items_return
 
 def get_object_content(parse, object_name, o_type):
 	#Instead of object-group there are also objects 
@@ -241,31 +283,51 @@ def get_object_content(parse, object_name, o_type):
 	# network-object 
 	indent_space = "     "
 	# Create empyt list
-	all_object_items = list()
+	all_object_items = dict()
+	dict_items = 0
 	if o_type == 'network' or o_type == 'service':
 		o_items = iter(parse.find_all_children('^object '+ o_type + ' ' + object_name + '', exactmatch=True))
 		#skip first item
-		next(o_items)
+		try:
+			next(o_items)
+		except:
+			print("ERROR! : get_og_content - first line not skipped")
 		for o_item in o_items:
+			dict_items = dict_items + 1
 			o_item_words = o_item.split()
 			#print(indent_space + o_item)
 			if o_item_words[0] == 'subnet':
 				#print(o_item_words[1])
-				all_object_items.append(o_item_words[1] + " " + o_item_words[2])
+				new_dict_line = {'host_id': o_item_words[1], 'subnet': o_item_words[2]}
+				all_object_items[dict_items] = new_dict_line
 			elif o_item_words[0] == 'host':
-				all_object_items.append(o_item_words[1] + "  255.255.255.255")
+				new_dict_line = {'host_id': o_item_words[1], 'subnet': '255.255.255.255'}
+				all_object_items[dict_items] = new_dict_line
 			elif o_item_words[0] == 'description':
 				o_item_desc = o_item[len("description "):]
-			elif o_item_words[0] == 'service-object':
-				print("SERVICE-OBJECT PART OF OG-SERVICE")
-			elif o_item_words[0] == 'port-object':
-				print("SERVICE-OBJECT PART OF PORT OG (ENDING OF ACL")	
+			#elif o_item_words[0] == 'service-object':
+			#	print("SERVICE-OBJECT PART OF OG-SERVICE")
+			#elif o_item_words[0] == 'port-object':
+			#	print("SERVICE-OBJECT PART OF PORT OG (ENDING OF ACL")	
+			elif o_item_words[0] == 'range':
+				# Returning IP addresses for the range
+				range_start_ip = str.decode(o_item_words[1])
+				range_end_ip = str.decode(o_item_words[2])
+				IP_in_range = find_IP_in_range(range_start_ip, range_end_ip)
+				for IP in IP_in_range:
+					if (debug):
+						print("In range IP :" + str(IP))
+					new_dict_line = {'host_id': IP, 'subnet': '255.255.255.255'}
+					#all_object_items.append(IP + " 255.255.255.255")
+					all_object_items[dict_items] = new_dict_line
+
 			else:
-				print("ERROR OBJECT " + o_item_words[0] +  " TYPE NOT FOUND")
+				print("ERROR OBJECT " + o_item_words[0] +  " TYPE NOT FOUND FOR " + object_name)
+		return all_object_items
 	else:
 		print("ERROR OBJECT TYPE " + o_type + " NOT SUPPORTED")
 
-	return all_object_items
+	
 
 def get_acl_dst_port_range(acl_line, acl_port_range_begin):
 	#split acl_line
@@ -276,7 +338,6 @@ def get_acl_dst_port_range(acl_line, acl_port_range_begin):
 	for i in range(acl_port_range_begin, acl_length+1):
 		acl_range_ports.append(get_acl_line_word(acl_line, i).encode("ascii"))
 
-
 	if FLATTEN_NESTED_LISTS == True:
 		acl_range_ports = flatten(acl_range_ports)		
 	#return a string
@@ -286,20 +347,25 @@ def get_acl_line_word(acl_line, word_nr):
 	acl_words = acl_line.split()
 	return acl_words[word_nr-1]
 
-def split_acl_lines(parse, acl_line):	
+def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
+	
 	acl_length = len(acl_line.split())
 	indent_space = "     "
 	acl_words = acl_line.split()
 	# FILTER LINES, DONT PROCESS FURTHER
 	skip_this_line = False
+	acl_line_inactive = False
+
 	if SKIP_INACTIVE == True and (get_acl_line_word(acl_line, acl_length) == 'inactive'):
+		acl_line_inactive = True
 		skip_this_line = True
-		print("SKIPPED! Inactive")
+		print("SKIPPED! Inactive : "),
 	# Check if a time filter is used and is exceeded
 	if SKIP_TIME_EXCEEDED == True and (get_acl_line_word(acl_line, acl_length-1) == 'time-range'):
 		skip_this_line = True
 		# RUN FUNCTION TO CHECK TIME AND RETURN SKIP TRUE OR FALSE
-		print("SKIPPED! time-range exceeded")
+		print("SKIPPED! time-range exceeded : "), 
+
 	# END FILTER
 	# Set default section names in ACL row (space seperated) they can change based on object-groups
 	acl_type_section = 1
@@ -316,9 +382,11 @@ def split_acl_lines(parse, acl_line):
 	acl_type = ''
 	acl_action = ''
 	acl_protocols_in_og = False
+	acl_protocol_og_items_list = ''
 	acl_protocol_og = ''
 	acl_protocol = ''
 	acl_source_in_og = False
+	acl_source_og_list = '' 			# Building list for output dict
 	acl_source_sn = ''
 	acl_source_nm = ''
 	acl_source_og = ''
@@ -326,21 +394,31 @@ def split_acl_lines(parse, acl_line):
 	acl_dst_sn = ''
 	acl_dst_nm = ''
 	acl_dst_og = ''
-	acl_dst_ports_in_og = False 	
+	acl_dst_ports_in_og = False 
+	acl_dst_ports_og_items_list = ''
+	acl_dst_og_list = ''
 	acl_dst_ports_og  = ''
 	acl_dst_ports = ''
+	acl_dst_ports_og_items = ''
+
 
 	# define empty variables
+	print(acl_line)
 	acl_type = get_acl_line_word(acl_line, acl_type_section)
-	if acl_type != 'remark' and not skip_this_line:
-		acl_action = get_acl_line_word(acl_line, acl_action_section)
+	if acl_type != 'remark':
 		
+
+		acl_action = get_acl_line_word(acl_line, acl_action_section)
 		acl_protocol = get_acl_line_word(acl_line, acl_protocol_section)
 		#check if protocl is object-group
 		if acl_protocol == 'object-group':
 			acl_protocols_in_og = True
 			acl_protocol_og = get_acl_line_word(acl_line, acl_protocol_section+1)
 			acl_protocol_og_items = get_og_content(parse, acl_protocol_og, 'service') 	# section holds the object-group type. Can be 'service' or 'protocol
+			# Create list for print and export
+			acl_protocol_og_items_list = list()
+			for key, item in acl_protocol_og_items.items():
+				acl_protocol_og_items_list.append(item[u'protocol'] + "\\" + item[u'destination_port']) 
 
 			# extend source and destination words
 			acl_src_ip_section = acl_src_ip_section + 1
@@ -359,10 +437,14 @@ def split_acl_lines(parse, acl_line):
 			acl_source_in_og = True
 			acl_source_og = get_acl_line_word(acl_line, acl_src_ip_section+1)
 			acl_source_og_items = get_og_content(parse, acl_source_og, 'network')
+			# Create list for print and exrpot -> Must be optimized
+			acl_source_og_list = list()
+
+			for key, item in acl_source_og_items.items():
+				acl_source_og_list.append(item[u'host_id'] + " " + item[u'subnet']) 
 		elif acl_source_sn == 'object':    # Added object 19-4-18 
 			acl_source_in_og = True
 			acl_source_og = get_acl_line_word(acl_line, acl_src_ip_section+1)
-			#acl_source_og_items = get_og_content(parse, acl_source_og, 'network')		
 			acl_source_og_items = get_object_content(parse, acl_source_og, 'network')		
 		elif acl_source_sn == 'host':
 			## Next item is host IP and not subnetmask. We generate default subnetmask
@@ -382,10 +464,18 @@ def split_acl_lines(parse, acl_line):
 		
 		# Get destination
 		acl_dst_sn = get_acl_line_word(acl_line, acl_dst_ip_section)
-		if acl_dst_sn == 'object-group' or acl_dst_sn == 'object':   # Added object 19-4-18 
+		if acl_dst_sn == 'object-group':
 			acl_dst_in_og = True
 			acl_dst_og = get_acl_line_word(acl_line, acl_dst_ip_section+1)
-			acl_dst_og_items = get_og_content(parse, acl_dst_og, 'network')						
+			acl_dst_og_items = get_og_content(parse, acl_dst_og, 'network')	
+			# Create Destination list, needed by print and export (MUST BE IMPROVED)
+			acl_dst_og_list = list()
+			for key, item in acl_dst_og_items.items():
+				acl_dst_og_list.append(item[u'host_id'] + " " + item[u'subnet']) 			
+		elif acl_source_sn == 'object':    # Added object 19-4-18 
+			acl_dst_in_og = True
+			acl_dst_og = get_acl_line_word(acl_line, acl_dst_ip_section+1)	
+			acl_dst_og_items = get_object_content(parse, acl_dst_og, 'network')	
 		elif acl_dst_sn == 'host':
 			## Next item is host IP and not subnetmask. We generate default subnetmask
 			acl_dst_sn = get_acl_line_word(acl_line, acl_dst_sn_section)
@@ -418,9 +508,20 @@ def split_acl_lines(parse, acl_line):
 			if acl_port_first == 'object-group':
 				acl_dst_ports_in_og = True
 				acl_dst_ports_og = get_acl_line_word(acl_line, acl_port_section+1)
-				# we need to extend the port object-name with the protocol by acl sdestination port groups
-				acl_dst_ports_og = acl_dst_ports_og + ' ' + acl_protocol
-				acl_dst_ports_og_items = get_og_content(parse, acl_dst_ports_og, 'service')
+
+				# we need to extend the port object-name with the protocol by acl destination port groups
+				if acl_protocol == 'udp' or acl_protocol == 'tcp':
+					acl_dst_ports_og = acl_dst_ports_og + ' ' + acl_protocol  		# 23-04 changed to next line because protocol can be tcp, udp OR both
+					#acl_dst_ports_og = acl_dst_ports_og + ' ' + get_acl_line_word(acl_line, acl_port_section+2)
+					acl_dst_ports_og_items = get_og_content(parse, acl_dst_ports_og, 'service')
+					# Create list for export
+					acl_dst_ports_og_items_list = list()
+
+					for key, item in acl_dst_ports_og_items.items():
+						acl_dst_ports_og_items_list.append(acl_protocol + " " + item[u'destination_port']) 
+
+				if acl_protocol == 'icmp':
+					acl_dst_ports_og_items = get_og_content(parse, acl_dst_ports_og, 'icmp')
 				if (debug):
 					print("ACL DST PORTS ITEMS"), acl_dst_ports_og_items
 				# CREATE EXTRA CHECK THAT THE OG HAVE SAME PROTOCOL MATCHING? NEED TO CHANGE function
@@ -428,14 +529,7 @@ def split_acl_lines(parse, acl_line):
 
 			# if word is time-range followed by time setting. This is a temporary rule
 
-	# VALIDATE INFO
-	# Check : 
-	# - IP address validation in Source - Destination
-	# - Protocol check
-	# - Port check
-	# - No Service-Group names in output
-	#
-	# ToDo Validation
+
 
 
 	# PRINT 
@@ -447,37 +541,38 @@ def split_acl_lines(parse, acl_line):
 		print("******* SOURCE: *******")
 		if acl_source_og != '':
 			print("acl_source_og : " + acl_source_og)
-			if SPLIT_OBJECT_GROUPS == True:
-				#convert list to string for print
-				str_acl_source_og_items = '\n        '.join(map(str, acl_source_og_items))
-				print(indent_space + "og_objects:" + str_acl_source_og_items)
-
+			for item in acl_source_og_list:
+				acl_source_word = item.split()
+				print(indent_space + indent_space + "host_id : " + acl_source_word[0]),
+				print(" subnet : " + acl_source_word[1])
 		else:
 			print("acl_source_sn : " + acl_source_sn)
 			print("acl_source_nm : " + acl_source_nm) 
 		print("****** DESTINATION: ******")
 		if acl_dst_og != '':
 			print("acl_dst_og : " + acl_dst_og)
-			if SPLIT_OBJECT_GROUPS == True:
-				#convert list to string for print
-				str_acl_dst_og_items = '\n        '.join(map(str, acl_dst_og_items))
-				print(indent_space + "og_objects:" + str_acl_dst_og_items)
-			else:
-				print(indent_space + "og_objects:" + acl_dst_og_items)
+			for item in acl_dst_og_list:
+				acl_dst_word = item.split()
+				print(indent_space + indent_space + "host_id : " + acl_dst_word[0]),
+				print(" subnet : " + acl_dst_word[1])
+
+		
+
 		else:
 			print("acl_dst_sn : " + acl_dst_sn)
 			print("acl_dst_nm : " + acl_dst_nm) 
 		
 		# DESTINATION PORTS
 		if (acl_protocols_in_og):
+			print("******** PORTS: ********")
 			print("acl_protocol_og: " + acl_protocol_og)
 			print(indent_space + "og_objects: ")
 			#RETURN IS DICTIONARY, CREATE LOOP
-			for key, item in acl_protocol_og_items.items():
-				#print key, value
-				print(indent_space + indent_space + "protocol " + item[u'protocol']),
-				if item[u'destination_port'] != '':
-					print("destination port " + item[u'destination_port'])
+			for item in acl_protocol_og_items_list:
+				acl_dst_ports_words = item.split()
+				print(indent_space + indent_space + "protocol " + acl_dst_ports_words[0]),
+				if len(acl_dst_ports_words) > 1 :
+					print("destination port " + acl_dst_ports_words[1])
 				else:
 					print("")
 			 	
@@ -488,60 +583,142 @@ def split_acl_lines(parse, acl_line):
 			if acl_dst_ports_og != '':
 				print("******** PORTS: ********")
 				print("acl_dst_ports_og : " + acl_dst_ports_og) 
-				for key, item in acl_dst_ports_og_items.items():
-					#print key, value
-					if item[u'destination_port'] != '':
-						print(indent_space + "protocol " + acl_protocol), 
-						print("destination port " + item[u'destination_port'])
+				for item in acl_dst_ports_og_items_list:
+					acl_dst_ports_words = item.split()
+					print(indent_space + indent_space + "protocol " + acl_dst_ports_words[0]),
+					if len(acl_dst_ports_words) > 1:
+						print("destination port " + acl_dst_ports_words[1])
 					else:
-						print(indent_space + "PORT NOT FOUND")
+						print("")
 
-			elif acl_dst_ports_og == '' and acl_port_words > 0:
+			elif acl_port_words > 0:
 				print("******** PORTS: ********")
 				
 				# Check if we have a string or list
 				if is_obj_string(acl_dst_ports) == True:
-					print(indent_space + "protocol" + acl_protocol), 
+					print(indent_space + "protocol " + acl_protocol), 
 					print("destination port : "),
 					print(acl_dst_ports)
 				else:
-					print(indent_space + "protocol" + acl_protocol), 
+					print(indent_space + "protocol " + acl_protocol), 
 					print("destination port : "),
 					for i in acl_dst_ports:
-						print(i), 	
+						print(i),
+					print("")
+			elif acl_protocol == 'ip':
+				print("******** PORTS: ********")
+				print(indent_space + "protocol " + acl_protocol)
+			else:
+				print("ERROR!! NO destination ports extracted!!")
 			
-		# Else they come from starting object group
+	
+	if (CREATE_DICT):
+		
+		new_dict_line = {'acl_line_number': acl_line_number,
+			'inactive': acl_line_inactive,
+			'acl_type': acl_type,
+			'acl_action': acl_action,
+			'acl_protocol_og': acl_protocol_og,
+			'acl_protocol_og_list': acl_protocol_og_items_list,
+			'acl_source_og': acl_source_og,
+			'acl_source_og_list': acl_source_og_list,
+			'acl_source_sn': acl_source_sn,
+			'acl_source_nm': acl_source_nm,
+			'acl_dst_og': acl_dst_og,
+			'acl_dst_og_list': acl_dst_og_list,
+			'acl_dst_sn': acl_dst_sn,
+			'acl_dst_nm': acl_dst_nm,
+			'acl_dst_ports_og': acl_dst_ports_og,
+			'acl_dst_ports': acl_dst_ports,
+			}
+		
 
-				
+	return new_dict_line
 
-#		else:
-#			print("NO PORTS IN DESTINATION ACL - SEE SERVICE GROUP FOR 2-WAY PORTS")
 
-def createCSVOutput(fileName, keys, listOfLists):
-    with open(fileName, 'w+') as f:
-        w= csv.DictWriter(f, keys)
-        w.writeheader()
-        for row in listOfLists:
-            w.writerow(row)
+def find_IP_in_range(start, end):
+	# Need ipaddress or ipaddr library
+	start = ip_address(start)
+	end = ip_address(end)
+	result = []
+	while start <= end:
+		result.append(str(start))
+		start += 1
+	return result
+
+
+
+	
+
+def list_all_object_group_items(parse, main_group, og_type):
+	all_object_groups_items = list()
+
+	if og_type == 'network' or og_type == 'service' or og_type == 'icmp':
+		if (debug):
+			print("OBJECT-GROUP CONTENT : object-group " + og_type.strip() +" " + main_group.strip())
+		try:
+			og_items = iter(parse.find_all_children('object-group '+ og_type.strip() +' '+ main_group.strip(), exactmatch=True))
+			#itercars = iter(cars)
+			next(og_items)
+		except:
+			#Try an protocol object group with same name, some service- OG (beginning ACL) have reference to protocol only
+			try:
+				og_items = iter(parse.find_all_children('object-group protocol '+ main_group.strip(), exactmatch=True))
+				#itercars = iter(cars)
+				next(og_items)
+			except:
+				#Try to use an tcp-udp object-group - this van be linked as port OG when there is an source OG where protocols are used (see above exept)
+				try:
+					og_items = iter(parse.find_all_children('object-group '+ og_type.strip() +' '+ main_group.strip() +' tcp-udp', exactmatch=True))
+					#itercars = iter(cars)
+					next(og_items)
+				except:				
+					print("ERROR: Object-group " + main_group.strip() + " not found for type " + og_type)
+
+		for og_item in og_items:
+			#print(og_item)		
+			og_item_words = og_item.split()
+			if og_item_words[0] != 'group-object' and og_item_words[0] != 'description':
+				#print("   NESTED GROUP : " + og_item_words[1])
+				all_object_groups_items.append(og_item)
+			elif og_item_words[0] == 'group-object':
+				#next_group = extract_nested_object_groups(parse, og_type, og_item_words[1])
+				all_object_groups_items.append(list_all_object_group_items(parse, og_item_words[1], og_type))
+
+	#Flatten the list
+	all_object_groups_items = flatten(all_object_groups_items)
+	return all_object_groups_items
+
 
 def main():
 	print("Read config file")
 
 	parse = parseconfig(input_config_file)
 	pprint(parse)
+
+	## GET ACL's
+
+
+	#acl_line_errors = dict()
+
+	## START ACL EXTRACTION
 	print("")
-
 	print("      get ACL info")
-	get_acl_lines(parse, "Interconnect_access_in")
+	total_acl_lines, parsed_remark_lines, parsed_acl_lines, parsed_unknown_lines = get_acl_lines(parse, "Transit-acl")
+	print(" Total ACL Lines :" + str(total_acl_lines))
+	print(" Remarks :" + str(parsed_remark_lines))
+	print(" ACLs : " + str(parsed_acl_lines))
+	print(" Unknown : " + str(parsed_unknown_lines))
+	print("*" * 20)
 
 
-#	acl_source_og = "BNS_Beheer_Segment"
-#	acl_source_og_items = get_og_content(parse, acl_source_og, 'network')
-#	if FLATTEN_NESTED_LISTS == True:
-#		acl_source_og_items = flatten(acl_source_og_items)
+	total_acl_lines, parsed_remark_lines, parsed_acl_lines, parsed_unknown_lines = get_acl_lines(parse, "Interconnect_access_in")
+	print(" Total ACL Lines :" + str(total_acl_lines))
+	print(" Remarks :" + str(parsed_remark_lines))
+	print(" ACLs : " + str(parsed_acl_lines))
+	print(" Unknown : " + str(parsed_unknown_lines))
+	print("*" * 20)
 
-	#print("")
-	#pprint(acl_source_og_items)
 
 if __name__ == "__main__":
 	main()
