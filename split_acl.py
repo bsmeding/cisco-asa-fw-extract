@@ -32,9 +32,9 @@ else:
 
 PRINT_REMARKS = False			# True for print to screen, False no print to screen
 PRINT_OUTPUT = True 			# Print to screen - default False
-EXPORT_REMARKS = True 			# Skip the remark lines in export output
-SPLIT_OBJECT_GROUPS = True		# 1 to loop trough object-group and printout rows
-EXTRACT_OBJECT_GROUPS = True	# True is extract all object-group to single output (nested groeps not visible), output to JSON will alway be nested
+EXPORT_REMARKS = False 			# Skip the remark lines in export output
+#SPLIT_OBJECT_GROUPS = True		# 1 to loop trough object-group and printout rows
+#EXTRACT_OBJECT_GROUPS = True	# True is extract all object-group to single output (nested groeps not visible), output to JSON will alway be nested
 FLATTEN_NESTED_LISTS = True		# True if the output of nested lists must be extracted to one list
 SKIP_INACTIVE = True			# True to skip lines that are inactie (last word of ACL line)
 SKIP_TIME_EXCEEDED = False		# Skip rules with time-ranges that have passed by
@@ -115,8 +115,6 @@ def is_obj_string(obj):
 		else:
 			return False
 
-
-
 def get_acl_lines(parse, acl_name):
 	"""
 	Get ACL line by line and parse to split_acl_lines to analyse per word
@@ -186,7 +184,6 @@ def get_acl_lines(parse, acl_name):
 
 	return (total_acl_lines, parsed_remark_lines, parsed_acl_lines, parsed_unknown_lines)
 			
-
 def get_og_content(parse, og_name, og_type):
 	all_og_items_return = dict()
 	og_rows_processed = 0
@@ -328,8 +325,6 @@ def get_object_content(parse, object_name, o_type):
 		return all_object_items
 	else:
 		print("ERROR OBJECT TYPE " + o_type + " NOT SUPPORTED")
-
-	
 
 def get_acl_dst_port_range(acl_line, acl_port_range_begin):
 	#split acl_line
@@ -580,7 +575,7 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 			 	
 
 		else:
-#			print("acl_protocol : " + acl_protocol)
+
 
 			if acl_dst_ports_og != '':
 				print("******** PORTS: ********")
@@ -607,7 +602,7 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 					for i in acl_dst_ports:
 						print(i),
 					print("")
-			elif acl_protocol == 'ip':
+			elif acl_protocol == 'ip' or acl_protocol == 'icmp':
 				print("******** PORTS: ********")
 				print(indent_space + "protocol " + acl_protocol)
 			else:
@@ -637,7 +632,6 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 
 	return new_dict_line
 
-
 def find_IP_in_range(start, end):
 	# Need ipaddress or ipaddr library
 	start = ip_address(start)
@@ -647,10 +641,6 @@ def find_IP_in_range(start, end):
 		result.append(str(start))
 		start += 1
 	return result
-
-
-
-	
 
 def list_all_object_group_items(parse, main_group, og_type):
 	all_object_groups_items = list()
@@ -700,7 +690,7 @@ def main():
 
 	# Only READ IN ONCE!
 	network_routes = get_network_routes(parse, True)
-	
+
 	## GET ACL's
 
 
