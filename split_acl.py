@@ -8,6 +8,8 @@ import re
 #import time
 #import ___ipaddress___						# IPaddress validation
 #import ___cidr_convert___					# Convert CIDR to Network address and reverse
+
+from __routing__ import *
 from pprint import pprint
 from ciscoconfparse import CiscoConfParse
 #from ciscoconfparse.ccp_util import IPv4Obj
@@ -696,6 +698,9 @@ def main():
 	parse = parseconfig(input_config_file)
 	pprint(parse)
 
+	# Only READ IN ONCE!
+	network_routes = get_network_routes(parse, True)
+	
 	## GET ACL's
 
 
