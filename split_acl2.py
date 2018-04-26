@@ -36,10 +36,10 @@ PRINT_OUTPUT = False 			# Print to screen - default False
 EXPORT_REMARKS = False 			# Skip the remark lines in export output
 #SPLIT_OBJECT_GROUPS = True		# 1 to loop trough object-group and printout rows
 EXTRACT_OBJECT_GROUPS = True	# True is extract all object-group to single output (nested groeps not visible), output to JSON will alway be nested
-FLATTEN_NESTED_LISTS = True		# True if the output of nested lists must be extracted to one list
+FLATTEN_NESTED_LISTS = True		# True if the output of nested lists must be extracted to one list   << AFTER CHANGING TO DICTS THIS IS NOT WORKING ANYMORE !!!!!! CHECK
 SKIP_INACTIVE = True			# True to skip lines that are inactie (last word of ACL line)
 SKIP_TIME_EXCEEDED = False		# Skip rules with time-ranges that have passed by
-EXTEND_PORT_RANGES = True 		# When True the ranges will be added seperataly, from begin to end range port
+EXTEND_PORT_RANGES = True 		# When True the ranges will be added seperataly, from begin to end range port. Other it will be printed as <port_start>-<port_end>   << NEEDS TO BE CHECKED
 debug = False
 CREATE_DICT = True
 
@@ -152,8 +152,7 @@ def get_acl_lines(parse, acl_name):
 
 					
 			elif acl_line.partition(' ')[0] == 'extended':
-				parsed_acl_lines = parsed_acl_lines + 1
-				print(acl_line_number), ":",				
+				parsed_acl_lines = parsed_acl_lines + 1	
 				new_acl_dict_line = split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number)
 				acl_line_dict[total_acl_lines] = new_acl_dict_line
 				acl_line_dict[total_acl_lines].update({'original_acl_line': acl_line})
@@ -196,58 +195,61 @@ def export_dict_to_csv(acl_line_dict, acl_name):
 					#Create row
 					#Chech for simple line, without object-groups
 					 
+					if item[u'acl_type'] != 'remark':
+						# Create source IP list
+						if item[u'acl_source_og_list'] != '':
+							#loop trough OG list
+							source_ips = item[u'acl_source_og_list']
 
-					# Create source IP list
-					if item[u'acl_source_og_list'] != '':
-						#loop trough OG list
-						source_ips = item[u'acl_source_og_list']
-					else:
-						source_ips = [item[u'acl_source_sn'] + ' ' + item[u'acl_source_nm']]
-					# Create Destination IP list
-					if item[u'acl_dst_og_list'] != '':
-						#loop trough OG list
-						destination_ips = item[u'acl_dst_og_list']
-					else:
-						destination_ips = [item[u'acl_dst_sn'] + ' ' + item[u'acl_dst_nm']]
+						else:
+							source_ips = [item[u'acl_source_sn'] + ' ' + item[u'acl_source_nm']]
+						# Create Destination IP list
+						if item[u'acl_dst_og_list'] != '':
+							#loop trough OG list
+							destination_ips = item[u'acl_dst_og_list']
+						else:
+							destination_ips = [item[u'acl_dst_sn'] + ' ' + item[u'acl_dst_nm']]
 
-					# Create Destination port list					
+						# Create Destination port list					
 
-					if item[u'acl_dst_ports_og_items_list'] != '':
-						destination_ports = item[u'acl_dst_ports_og_items_list']
-					elif item[u'acl_dst_ports_og_items_list'] != '':
-						destination_ports = item[u'acl_dst_ports_og_items_list']
-					else:
-						destination_ports =  [item[u'acl_dst_ports']]
+						if item[u'acl_dst_ports_og_items_list'] != '':
+							destination_ports = item[u'acl_dst_ports_og_items_list']
+						elif item[u'acl_dst_ports_og_items_list'] != '':
+							destination_ports = item[u'acl_dst_ports_og_items_list']
+						else:
+							destination_ports =  [item[u'acl_dst_ports']]
 
-					acl_source_destination_port_list = list(itertools.product(source_ips, destination_ips, destination_ports))	
-					#print("")
-					#pprint(acl_source_destination_port_list )
-					#print("")
-					# LOOP trough items
-					for list_item in acl_source_destination_port_list:
-						acl_line_child = acl_line_child + 1
-						#split into 3 parts, source, destination, port. 
-						#print(list_item[0], list_item[1], list_item[2])
-						acl_source_host_sn = ''
-						acl_dst_host_sn = ''
-						acl_source_full = list_item[0].split()
-						acl_source_host_id = acl_source_full[0]
-						if len(acl_source_full) >1:
-							acl_source_host_sn = acl_source_full[1]	
-						acl_dst_full = list_item[1].split()
-						acl_dst_host_id = acl_source_full[0]
-						if len(acl_dst_full) >1:
-							acl_dst_host_sn = acl_source_full[1]	
-						acl_dst_port = list_item[2]
-						
-						new_csv_row = (int(item[u'acl_line_number']), acl_line_child, item[u'inactive'], item[u'acl_type'], item[u'acl_action'], item['acl_protocol'], \
-							item[u'acl_protocol_og'], item[u'acl_protocol_og_list'], \
-							acl_source_host_id, acl_source_host_sn, acl_dst_host_id, acl_dst_host_sn, acl_dst_port, item[u'original_acl_line'])
+						acl_source_destination_port_list = list(itertools.product(source_ips, destination_ips, destination_ports))	
+						#print("")
+						#pprint(acl_source_destination_port_list )
+						#print("")
+						# LOOP trough items
+						for list_item in acl_source_destination_port_list:
+							acl_line_child = acl_line_child + 1
+							#split into 3 parts, source, destination, port. 
+							#print(list_item[0], list_item[1], list_item[2])
+							acl_source_host_sn = ''
+							acl_dst_host_sn = ''
+							acl_source_full = list_item[0].split()
+							acl_source_host_id = acl_source_full[0]
+							if len(acl_source_full) >1:
+								acl_source_host_sn = acl_source_full[1]	
+							acl_dst_full = list_item[1].split()
+							acl_dst_host_id = acl_dst_full[0]
+							if len(acl_dst_full) >1:
+								acl_dst_host_sn = acl_dst_full[1]	
+							acl_dst_port = list_item[2]
+							
+							new_csv_row = (int(item[u'acl_line_number']), acl_line_child, item[u'inactive'], item[u'acl_type'], item[u'acl_action'], item['acl_protocol'], \
+								item[u'acl_protocol_og'], item[u'acl_protocol_og_list'], \
+								acl_source_host_id, acl_source_host_sn, acl_dst_host_id, acl_dst_host_sn, acl_dst_port, item[u'original_acl_line'])
+							writer.writerow(new_csv_row)
+						#print(new_csv_row)
+						#writer.writerow(new_csv_row)
+					else: # = remark
+						new_csv_row = (int(item[u'acl_line_number']), acl_line_child, item[u'inactive'], item[u'acl_type'], '', '', \
+								'' , '', '', '', '', '', '', item[u'original_acl_line'])
 						writer.writerow(new_csv_row)
-					#print(new_csv_row)
-					#writer.writerow(new_csv_row)
-
-
 
 
 		else:
@@ -267,7 +269,6 @@ def export_dict_to_csv(acl_line_dict, acl_name):
 						item[u'acl_dst_og'], item[u'acl_dst_og_list'], item[u'acl_dst_sn'], \
 						item[u'acl_dst_nm'], item[u'acl_dst_ports_og'], item[u'acl_dst_ports_og_items_list'], item[u'acl_dst_ports'], item[u'original_acl_line'] \
 						])
-
 			
 def get_og_content(parse, og_name, og_type):
 	all_og_items_return = dict()
@@ -433,11 +434,17 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 	# FILTER LINES, DONT PROCESS FURTHER
 	skip_this_line = False
 	acl_line_inactive = False
+	if (python3):
+		print(acl_line_number, end="", flush=True)
+		print(" : ", flush=True)
+	else:
+		print(acl_line_number),
+		print(" : "), 
 
 	if SKIP_INACTIVE == True and (get_acl_line_word(acl_line, acl_length) == 'inactive'):
 		acl_line_inactive = True
 		skip_this_line = True
-		print("SKIPPED! Inactive : "),
+		print("SKIPPED! Inactive : ", flush=False)
 	# Check if a time filter is used and is exceeded
 	if SKIP_TIME_EXCEEDED == True and (get_acl_line_word(acl_line, acl_length-1) == 'time-range'):
 		skip_this_line = True
@@ -481,7 +488,7 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 
 
 	# define empty variables
-	print(acl_line)
+	#print(acl_line)
 	acl_type = get_acl_line_word(acl_line, acl_type_section)
 	if acl_type != 'remark':
 		
@@ -610,7 +617,10 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 					acl_dst_ports_og_items_list = list()
 
 					for key, item in acl_dst_ports_og_items.items():
-						acl_dst_ports_og_items_list.append(acl_protocol + " " + item[u'destination_port']) 
+						#acl_dst_ports_og_items_list.append(acl_protocol + " " + item[u'destination_port']) 
+						#Check if item is string (named port) or number
+						acl_dst_port_item = replace_port_name_to_number(item[u'destination_port'])
+						acl_dst_ports_og_items_list.append(acl_dst_port_item) 
 
 				if acl_protocol == 'icmp':
 					acl_dst_ports_og_items = get_og_content(parse, acl_dst_ports_og, 'icmp')
@@ -728,6 +738,23 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 		
 
 	return new_dict_line
+
+def replace_port_name_to_number(name):
+	# Dict needs to be replaced by CSV import!
+	if is_obj_string(name):
+		#print("DESTINATION PORT OG IS WORD!!!!!")
+		name = 'http'
+		d = {
+			'http': '80',
+			'https': '443',
+			'ldap': '389',
+			'ldaps': '636',
+		}
+		pattern = re.compile(r'\b(' + '|'.join(d.keys()) + r')\b')
+		result = pattern.sub(lambda x: d[x.group()], name)
+		return result
+	else:
+		return name
 
 def find_IP_in_range(start, end):
 	# Need ipaddress or ipaddr library

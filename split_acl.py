@@ -170,7 +170,12 @@ def get_acl_lines(parse, acl_name):
 			'acl_dst_og', 'acl_dst_og_list', 'acl_dst_sn', \
 			'acl_dst_nm', 'acl_dst_ports_og', 'acl_dst_ports', 'original_acl_line']
 
-		with open('acl_lines_'+acl_name+'.csv', 'wb') as csv_file:
+		if python3 == True:
+			open_csv_writemode = 'w'
+		else:
+			open_csv_writemode = 'wb'
+		
+		with open('acl_lines_'+acl_name+'.csv', open_csv_writemode) as csv_file:
 			writer = csv.writer(csv_file)
 			writer.writerow(csv_columns)
 			for key, item in acl_line_dict.items():
@@ -304,14 +309,10 @@ def get_object_content(parse, object_name, o_type):
 				all_object_items[dict_items] = new_dict_line
 			elif o_item_words[0] == 'description':
 				o_item_desc = o_item[len("description "):]
-			#elif o_item_words[0] == 'service-object':
-			#	print("SERVICE-OBJECT PART OF OG-SERVICE")
-			#elif o_item_words[0] == 'port-object':
-			#	print("SERVICE-OBJECT PART OF PORT OG (ENDING OF ACL")	
 			elif o_item_words[0] == 'range':
 				# Returning IP addresses for the range
-				range_start_ip = str.decode(o_item_words[1])
-				range_end_ip = str.decode(o_item_words[2])
+				range_start_ip = str(o_item_words[1])					# Changed 26-4 removed decode from str.decode possible Python3 not needed
+				range_end_ip = str(o_item_words[2])						# Changed 26-4 removed decode from str.decode possible Python3 not needed
 				IP_in_range = find_IP_in_range(range_start_ip, range_end_ip)
 				for IP in IP_in_range:
 					if (debug):
