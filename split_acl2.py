@@ -434,22 +434,27 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 	# FILTER LINES, DONT PROCESS FURTHER
 	skip_this_line = False
 	acl_line_inactive = False
-	if (python3):
-		print(acl_line_number, end="", flush=True)
-		print(" : ", flush=True)
-	else:
-		print(acl_line_number),
-		print(" : "), 
+
 
 	if SKIP_INACTIVE == True and (get_acl_line_word(acl_line, acl_length) == 'inactive'):
 		acl_line_inactive = True
 		skip_this_line = True
-		print("SKIPPED! Inactive : ", flush=False)
+		print(str(acl_line_number) + str(" : SKIPPED! Inactive !"))
 	# Check if a time filter is used and is exceeded
 	if SKIP_TIME_EXCEEDED == True and (get_acl_line_word(acl_line, acl_length-1) == 'time-range'):
 		skip_this_line = True
 		# RUN FUNCTION TO CHECK TIME AND RETURN SKIP TRUE OR FALSE
-		print("SKIPPED! time-range exceeded : "), 
+		print(str(acl_line_number) + str(" : SKIPPED! time-range exceeded !"))
+
+	if (skip_this_line != True):
+		if (python3):
+			print(acl_line_number, end="", flush=True)
+			print(" : ", end="", flush=True)
+			print(acl_line, flush=True)
+		else:
+			print(acl_line_number),
+			print(" : "), 
+			print(acl_line)
 
 	# END FILTER
 	# Set default section names in ACL row (space seperated) they can change based on object-groups
