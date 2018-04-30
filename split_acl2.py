@@ -64,7 +64,13 @@ ToDo:
 
 #input_config_file = "confsmall.conf" 
 input_config_file = "ciscoconfig.conf" 
+output_csv_file = "acl_seperated.csv"
+output_dir = 'output'
 
+# Create output directory
+output_dir = './' + output_dir
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir) 
 
 
 def parseconfig(filename):
@@ -186,8 +192,8 @@ def export_dict_to_csv(acl_line_dict, acl_name):
 				'acl_source_host_id', 'acl_source_host_sn', 'acl_dst_host_id', 'acl_dst_host_sn', 'acl_dst_port', \
 				'original_acl_line']
 
-
-			with open('acl_lines_'+acl_name+'.csv', open_csv_writemode) as csv_file:
+			export_dir = os.path.join(output_dir, '')
+			with open(export_dir + 'acl_lines_'+acl_name+'.csv', open_csv_writemode) as csv_file:
 				writer = csv.writer(csv_file)
 				writer.writerow(csv_columns)
 				for key, item in acl_line_dict.items():
