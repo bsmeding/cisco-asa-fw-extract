@@ -941,10 +941,12 @@ def main():
 			extracted_acl_lines.update(acl_lines_this_acl)
 			#pprint(acl_lines_this_acl)
 		total_acl_lines = total_acl_lines + total_acl_lines
-		print(" Total ACL Lines :" + str(total_acl_lines))
-		print(" Remarks :" + str(parsed_remark_lines))
-		print(" ACLs : " + str(parsed_acl_lines))
-		print(" Unknown : " + str(parsed_unknown_lines))
+		print("*" * 20)
+		print(" This ACL Remarks :" + str(parsed_remark_lines))
+		print(" This ACL ACLs : " + str(parsed_acl_lines))
+		print(" This ACL Unknown rows: " + str(parsed_unknown_lines))
+		print("*" * 20)
+		print(" Total ACL Lines for export :" + str(total_acl_lines))
 		print("*" * 80)
 
 	#Export returning DICT
