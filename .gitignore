@@ -1,8 +1,8 @@
-*.conf
+*.csv
 /output/*
 /old/*
 *.pyc
-/*.conf
+*.conf
 test*
 *backup*
 __pycache__
