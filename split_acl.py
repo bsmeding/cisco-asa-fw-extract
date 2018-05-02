@@ -51,6 +51,7 @@ CREATE_DICT = True 				# Maybe remove!
 
 #input_config_file = "confsmall.conf" 
 input_config_file = "ciscoconfig.conf" 
+
 #output_csv_file = "acl_seperated.csv"
 output_dir = 'output'
 
