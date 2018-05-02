@@ -34,7 +34,7 @@ else:
 
 
 PRINT_REMARKS = False			# True for print to screen, False no print to screen
-PRINT_LINES = False 			# Print line info
+PRINT_LINES = True 			# Print line info
 PRINT_FULL_OUTPUT = False 		# Print full extract info (debug)
 EXPORT_TO_CSV = True 			# Export ACL Lines to CSV
 EXPORT_REMARKS = False 			# Skip the remark lines in export output
@@ -156,7 +156,7 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 			# First check if remark or ACL type
 			if acl_line.partition(' ')[0] == 'remark':
 				parsed_remark_lines = parsed_remark_lines + 1
-				if PRINT_REMARKS == True and PRINT_LINES == True:
+				if (PRINT_REMARKS == True and PRINT_LINES == True) or (debug):
 					print(acl_line_number), ":",
 					print(acl_line)
 				if EXPORT_REMARKS == True:
@@ -168,10 +168,12 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 					acl_line_dict[total_acl_lines].update({'acl_interface': acl_interface})
 					acl_line_dict[total_acl_lines].update({'acl_direction': acl_direction})
 					acl_line_dict[total_acl_lines].update({'acl_name': acl_name})
-
 					# Add original row
 					if EXPORT_ORIGINAL_LINE == True:
 						acl_line_dict[total_acl_lines].update({'original_acl_line': acl_line})
+					if (debug):
+						print("NEW ACL LINE TO DICT : "),
+						pprint(acl_line_dict[total_acl_lines])
 
 							
 					
@@ -188,6 +190,11 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 				# Add original row
 				if EXPORT_ORIGINAL_LINE == True:
 					acl_line_dict[total_acl_lines].update({'original_acl_line': acl_line})
+
+				if (debug):
+					print("NEW ACL LINE TO DICT : "),
+					pprint(acl_line_dict[total_acl_lines])
+
 			else:
 				parsed_unknown_lines = parsed_unknown_lines + 1
 				print("ERROR! Unkown ACL type!")
@@ -204,8 +211,6 @@ def export_dict_to_csv(extracted_acl_lines):
 	"""
 	# Export Dictionary to CSV
 	if extracted_acl_lines != '':
-
-
 
 		if python3 == True:
 			open_csv_writemode = 'w'
@@ -234,14 +239,20 @@ def export_dict_to_csv(extracted_acl_lines):
 				#Create row
 				#Chech for simple line, without object-groups
 				acl_protocol_row = '' 
-
+				source_ips = ''
+				destination_ips = ''
+				acl_protocol_items = ''
+				destination_ports = ''
 				if item[u'acl_type'] != 'remark':
 					# Create protocol list
 					if item[u'acl_protocol_og_list'] != '':
 						#loop trough OG list
 						acl_protocol_items = item[u'acl_protocol_og_list']
+						if (debug):
+							print("Ports in protocol OG : "), acl_protocol_items					
 
 					else:
+						# Set ACL_protocol to protocol item, needed in destination_ports loop ???(CHECK)
 						acl_protocol = str(item[u'acl_protocol'])
 					
 
@@ -250,34 +261,43 @@ def export_dict_to_csv(extracted_acl_lines):
 					if item[u'acl_source_og_list'] != '':
 						#loop trough OG list
 						source_ips = item[u'acl_source_og_list']
-
 					else:
 						source_ips = [item[u'acl_source_sn'] + ' ' + item[u'acl_source_nm']]
 					# Create Destination IP list
 					if item[u'acl_dst_og_list'] != '':
 						#loop trough OG list
 						destination_ips = item[u'acl_dst_og_list']
+				
 					else:
 						destination_ips = [item[u'acl_dst_sn'] + ' ' + item[u'acl_dst_nm']]
 
 					# Create Destination port list					
 
 					if item[u'acl_dst_ports_og_items_list'] != '':
+						if (debug):
+							print("Dest ports in OG")
 						destination_ports = item[u'acl_dst_ports_og_items_list']
-					elif item[u'acl_dst_ports_og_items_list'] != '':
-						destination_ports = item[u'acl_dst_ports_og_items_list']
+					#elif item[u'acl_dst_ports_og_items_list'] != '':
+					#	destination_ports = item[u'acl_dst_ports_og_items_list']
 					else:
 						destination_ports =  [item[u'acl_dst_ports']]
 
 
-					if item[u'acl_source_og_list'] != '':
-						acl_source_destination_port_list = list(itertools.product(source_ips, destination_ips, destination_ports, acl_protocol_items))	
+					if (debug):
+						print("Source IP in OG : "), source_ips	
+						print("Destination IP's "), destination_ips			
+						print("Protocol ports "), acl_protocol_items
+						print("Destination ports"), destination_ports
+					if item[u'acl_protocol_og_list'] != '':
+						#acl_source_destination_port_list = list(itertools.product(source_ips, destination_ips, destination_ports, acl_protocol_items))	
+						acl_source_destination_port_list = list(itertools.product(source_ips, destination_ips, acl_protocol_items))	
 					else:
 						acl_source_destination_port_list = list(itertools.product(source_ips, destination_ips, destination_ports))	
 					
-					print("")
-					pprint(acl_source_destination_port_list )
-					print("")
+					if (debug):
+						print("ACL Source - Destination - Portlist")
+						pprint(acl_source_destination_port_list )
+						print("")
 					# LOOP trough items
 					for list_item in acl_source_destination_port_list:
 						acl_line_child = acl_line_child + 1
@@ -298,14 +318,14 @@ def export_dict_to_csv(extracted_acl_lines):
 						if len(acl_dst_full) >1:
 							acl_dst_host_sn = acl_dst_full[1]	
 						acl_dst_port = list_item[2]
-						if item[u'acl_source_og_list'] != '':
-							acl_protocol_full = list_item[3].split()
+						if item[u'acl_protocol_og_list'] != '':
+							acl_protocol_full = list_item[2].split()
 							if len(acl_protocol_full) >1:
 								acl_protocol = acl_protocol_full[0]
 								acl_dst_port = acl_protocol_full[1]
 							else:
-								acl_protocol = ''
-								acl_dst_port = list_item[2]
+								acl_protocol = list_item[2]
+								acl_dst_port = ''
 						else:
 							acl_protocol = item[u'acl_protocol']
 
@@ -314,7 +334,11 @@ def export_dict_to_csv(extracted_acl_lines):
 							item[u'acl_protocol_og'], item[u'acl_protocol_og_list'], \
 							acl_source_host_id, acl_source_host_sn, acl_dst_host_id, acl_dst_host_sn, acl_dst_port, acl_protocol,\
 							item[u'original_acl_line'])
+						if (debug):
+							print("NEW DICT TO CSV LINE: "),
+							print(new_csv_row)
 						writer.writerow(new_csv_row)
+
 					#print(new_csv_row)
 					#writer.writerow(new_csv_row)
 				else: # = remark
@@ -503,11 +527,11 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 
 	if (skip_this_line != True):
 		if PRINT_LINES == True:
-			if (python3):
-				print(acl_line_number, end="", flush=True)
-				print(" : ", end="", flush=True)
-				print(acl_line, flush=True)
-			else:
+			#if (python3):
+			#	print(acl_line_number, end="", flush=True)
+			#	print(" : ", end="", flush=True)
+			#	print(acl_line, flush=True)
+			#else:
 				print(acl_line_number),
 				print(" : "), 
 				print(acl_line)
@@ -913,7 +937,7 @@ def intf_acl_to_dict(parse):
 
 def get_nameif_interfaces(parse):
 	interfaces = []
-	interfaces = [obj for obj in parse.find_objects(r"^interface Ethernet1/3.4") \
+	interfaces = [obj for obj in parse.find_objects(r"^interface Ethernet1/3.424") \
     	if obj.re_search_children(r"nameif")]
 	return interfaces
 
