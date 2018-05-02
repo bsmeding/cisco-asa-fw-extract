@@ -1,7 +1,7 @@
-*.conf
+*.csv
 /output/*
 *.pyc
-/*.conf
+*.conf
 test*
 *backup*
 __pycache__

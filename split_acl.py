@@ -221,17 +221,23 @@ def export_dict_to_csv(extracted_acl_lines):
 		# Create one file with all ACLs
 		csv_columns = ['acl_line_number', 'acl_line_child', 'acl_interface', 'acl_direction', 'acl_name', \
 				'inactive', 'acl_type', 'acl_action', \
-				'acl_protocol_og', 'acl_protocol_og_list', \
 				'acl_source_host_id', 'acl_source_host_sn', 'acl_dst_host_id', 'acl_dst_host_sn', 'acl_dst_port', 'acl_protocol', \
 				'original_acl_line']
 
 		export_dir = os.path.join(output_dir, '')
-		#Clear folder
-		shutil.rmtree(export_dir, ignore_errors=True)
+		export_file = hostname + '-all_acl_lines.csv'
+		#Delete file if exist
 		if not os.path.exists(export_dir):
 			os.makedirs(export_dir)
+		else:
+			#Folder exist, remove file if already exist
+			try:
+				os.remove(export_dir + export_file)
+			except OSError:
+				pass
+
 		#add new export
-		with open(export_dir + 'all_acl_lines.csv', open_csv_writemode) as csv_file:
+		with open(export_dir + export_file, open_csv_writemode) as csv_file:
 			writer = csv.writer(csv_file)
 			writer.writerow(csv_columns)
 			for key, item in extracted_acl_lines.items():
@@ -331,7 +337,6 @@ def export_dict_to_csv(extracted_acl_lines):
 
 						new_csv_row = (int(item[u'acl_line_number']), acl_line_child, item[u'acl_interface'], item[u'acl_direction'], item[u'acl_name'], \
 							item[u'inactive'], item[u'acl_type'], item[u'acl_action'], \
-							item[u'acl_protocol_og'], item[u'acl_protocol_og_list'], \
 							acl_source_host_id, acl_source_host_sn, acl_dst_host_id, acl_dst_host_sn, acl_dst_port, acl_protocol,\
 							item[u'original_acl_line'])
 						if (debug):
@@ -342,8 +347,10 @@ def export_dict_to_csv(extracted_acl_lines):
 					#print(new_csv_row)
 					#writer.writerow(new_csv_row)
 				else: # = remark
-					new_csv_row = (int(item[u'acl_line_number']), acl_line_child, item[u'inactive'], item[u'acl_type'], '', '', \
-							'' , '', '', '', '', '', '', item[u'original_acl_line'])
+					new_csv_row = (int(item[u'acl_line_number']), acl_line_child, item[u'acl_interface'], item[u'acl_direction'], item[u'acl_name'], \
+						item[u'inactive'], item[u'acl_type'], '', \
+							'' , '', '', '', '', '', \
+							item[u'original_acl_line'])
 					writer.writerow(new_csv_row)
 
 			
@@ -935,9 +942,15 @@ def intf_acl_to_dict(parse):
 
 	return interface_acl_dict
 
+def get_hostname(parse):
+	hostname_row = parse.find_lines(r'^hostname ')
+	hostname_row = hostname_row[0]
+	hostname = hostname_row.strip()[len("hostname "):] 
+	return hostname
+
 def get_nameif_interfaces(parse):
 	interfaces = []
-	interfaces = [obj for obj in parse.find_objects(r"^interface Ethernet1/3.424") \
+	interfaces = [obj for obj in parse.find_objects(r"^interf") \
     	if obj.re_search_children(r"nameif")]
 	return interfaces
 
@@ -969,6 +982,12 @@ def main():
 	parse = parseconfig(input_config_file)
 	pprint(parse)
 
+	#Get hostname - needed for printout and export
+	global hostname
+	hostname = get_hostname(parse)
+
+
+
 	# Only READ IN ONCE! = Global
 	global network_routes	
 	network_routes = dict()
@@ -990,6 +1009,7 @@ def main():
 		parsed_unknown_lines = 0
 		
 		print("")
+		print("******" + hostname + "******")
 		print("ACL extraction for " + str(key))
 
 		acl_interface = key
