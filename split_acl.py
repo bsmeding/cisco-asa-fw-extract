@@ -38,7 +38,7 @@ PRINT_LINES = False 			# Print line info
 PRINT_FULL_OUTPUT = False 		# Print full extract info (debug)
 EXPORT_TO_CSV = True 			# Export ACL Lines to CSV
 EXPORT_REMARKS = False 			# Skip the remark lines in export output
-EXPORT_ORIGINAL_LINE = False 	# Export the original ACL line (takes longer, and more export data)
+EXPORT_ORIGINAL_LINE = True 	# Export the original ACL line (takes longer, and more export data)
 FLATTEN_NESTED_LISTS = True		# True if the output of nested lists must be extracted to one list   << AFTER CHANGING TO DICTS THIS IS NOT WORKING ANYMORE !!!!!! CHECK
 SKIP_INACTIVE = True			# True to skip lines that are inactie (last word of ACL line)
 EXTEND_PORT_RANGES = True 		# When True the ranges will be added seperataly, from begin to end range port. Other it will be printed as <port_start>-<port_end>   << NEEDS TO BE CHECKED
@@ -275,9 +275,9 @@ def export_dict_to_csv(extracted_acl_lines):
 					else:
 						acl_source_destination_port_list = list(itertools.product(source_ips, destination_ips, destination_ports))	
 					
-					#print("")
-					#pprint(acl_source_destination_port_list )
-					#print("")
+					print("")
+					pprint(acl_source_destination_port_list )
+					print("")
 					# LOOP trough items
 					for list_item in acl_source_destination_port_list:
 						acl_line_child = acl_line_child + 1
@@ -913,7 +913,7 @@ def intf_acl_to_dict(parse):
 
 def get_nameif_interfaces(parse):
 	interfaces = []
-	interfaces = [obj for obj in parse.find_objects(r"^interf") \
+	interfaces = [obj for obj in parse.find_objects(r"^interface Ethernet1/3.4") \
     	if obj.re_search_children(r"nameif")]
 	return interfaces
 
