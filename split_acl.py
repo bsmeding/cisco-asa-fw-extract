@@ -5,19 +5,14 @@ import os
 import sys
 import re
 import itertools							# To combine list and all permutations
-#import getpass
-#import time
-#import ___ipaddress___						# IPaddress validation
-#import ___cidr_convert___					# Convert CIDR to Network address and reverse
+
 
 from __routing__ import *
 from pprint import pprint
 from ciscoconfparse import CiscoConfParse
-#from ciscoconfparse.ccp_util import IPv4Obj
-#from collections import namedtuple
-#import cidr_convert
+
 import csv 						# CSV Export 
-import shutil								# Needed for deleting export files in folder
+
 
 
 # Import ipaddress library based on Python version (2.x of 3.2 = ipaddr >3.2 ipaddres) used to calculate ip addresses in range
@@ -34,7 +29,7 @@ else:
 
 
 PRINT_REMARKS = False			# True for print to screen, False no print to screen
-PRINT_LINES = True 			# Print line info
+PRINT_LINES = False 			# Print line info
 PRINT_FULL_OUTPUT = False 		# Print full extract info (debug)
 EXPORT_TO_CSV = True 			# Export ACL Lines to CSV
 EXPORT_REMARKS = False 			# Skip the remark lines in export output
@@ -42,7 +37,7 @@ EXPORT_ORIGINAL_LINE = True 	# Export the original ACL line (takes longer, and m
 FLATTEN_NESTED_LISTS = True		# True if the output of nested lists must be extracted to one list   << AFTER CHANGING TO DICTS THIS IS NOT WORKING ANYMORE !!!!!! CHECK
 SKIP_INACTIVE = True			# True to skip lines that are inactie (last word of ACL line)
 EXTEND_PORT_RANGES = True 		# When True the ranges will be added seperataly, from begin to end range port. Other it will be printed as <port_start>-<port_end>   << NEEDS TO BE CHECKED
-
+CALCULATE_NEXT_HOP_INFO = True 	# Calculate next hop interface, ip and route prio. Note that this will need some time as it will calculate for each row!
 
 SKIP_TIME_EXCEEDED = False		# Skip rules with time-ranges that have passed by
 debug = False
@@ -67,7 +62,7 @@ ToDo:
 	# - IP address validation in Source - Destination
 	# - Protocol check
 	# - Port check
-	# - No Service-Group names in output
+	# 
 	#
 	# ToDo Validation
 """
@@ -223,6 +218,7 @@ def export_dict_to_csv(extracted_acl_lines):
 		csv_columns = ['acl_line_number', 'acl_line_child', 'acl_interface', 'acl_direction', 'acl_name', \
 				'inactive', 'acl_type', 'acl_action', \
 				'acl_source_host_id', 'acl_source_host_sn', 'acl_dst_host_id', 'acl_dst_host_sn', 'acl_dst_port', 'acl_protocol', \
+				'dst_interface', 'dst_next_hop', 'dst_next_hop_prio', \
 				'original_acl_line']
 
 		export_dir = os.path.join(output_dir, '')
@@ -336,9 +332,29 @@ def export_dict_to_csv(extracted_acl_lines):
 						else:
 							acl_protocol = item[u'acl_protocol']
 
+						# Calculate next hop and outgoing interface based on destination CIDR
+						dst_next_hop_intf = ''
+						dst_next_hop_ip = ''
+						dst_next_hop_prio = ''
+						acl_dst_cidr = acl_dst_host_id + "/" + str(netmask_to_cidr(acl_dst_host_sn))
+						#print(acl_dst_cidr)
+						if CALCULATE_NEXT_HOP_INFO == True:
+							try:
+								dst_next_hop_info = get_ip_next_hop(network_routes, acl_dst_cidr)
+								if (debug):
+									print("ACL NEXT HOP INFO. Host " + acl_dst_host_id + " - SN:" +  acl_dst_host_sn + " CIDR " + acl_dst_cidr), 
+									print(dst_next_hop_info)
+								
+								dst_next_hop_ip = dst_next_hop_info[0]
+								dst_next_hop_intf = dst_next_hop_info[1]
+								dst_next_hop_prio = dst_next_hop_info[2]
+							except:
+								pass
+
 						new_csv_row = (int(item[u'acl_line_number']), acl_line_child, item[u'acl_interface'], item[u'acl_direction'], item[u'acl_name'], \
 							item[u'inactive'], item[u'acl_type'], item[u'acl_action'], \
 							acl_source_host_id, acl_source_host_sn, acl_dst_host_id, acl_dst_host_sn, acl_dst_port, acl_protocol,\
+							dst_next_hop_intf, dst_next_hop_ip, dst_next_hop_prio, \
 							item[u'original_acl_line'])
 						if (debug):
 							print("NEW DICT TO CSV LINE: "),
@@ -535,11 +551,11 @@ def split_acl_lines(parse, acl_line, total_acl_lines, acl_line_number):
 
 	if (skip_this_line != True):
 		if PRINT_LINES == True:
-			#if (python3):
-			#	print(acl_line_number, end="", flush=True)
-			#	print(" : ", end="", flush=True)
-			#	print(acl_line, flush=True)
-			#else:
+			if python3 == True:
+				print(acl_line_number, end="", flush=True)
+				print(" : ", end="", flush=True)
+				print(acl_line, flush=True)
+			else:
 				print(acl_line_number),
 				print(" : "), 
 				print(acl_line)
@@ -985,11 +1001,13 @@ def main():
 
 	#Get hostname - needed for printout and export
 	global hostname
+	hostname = ''
 	hostname = get_hostname(parse)
 
 
 
-	# Only READ IN ONCE! = Global
+	# Only READ IN ONCE! = Global, Reverced = True
+	# Need import of __routing__.py
 	global network_routes	
 	network_routes = dict()
 	network_routes = get_network_routes(parse, True)
