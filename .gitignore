@@ -1,5 +1,6 @@
 *.csv
 /output/*
+/old/*
 *.pyc
 *.conf
 test*
