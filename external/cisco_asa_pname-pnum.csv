@@ -41,7 +41,7 @@ rsh,514
 rtsp,554
 sip,5060
 snmp, 161
-snmp-trap, 162
+snmptrap, 162
 smtp,25
 sqlnet,1522
 ssh,22
