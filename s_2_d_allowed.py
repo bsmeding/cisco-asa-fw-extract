@@ -1,7 +1,11 @@
-import ipaddr											# Used for IP - Route match
-from ___routing___	import *							# Used for nexthop information
-from collections import OrderedDict
+#!/usr/bin/env python
+from __future__ import unicode_literals
 
+#import ipaddr											# Used for IP - Route match
+#from __routing__ import *							# Used for nexthop information
+#from collections import OrderedDict
+import csv
+from pprint import pprint
 
 """
 Import file for Cisco ASA config normalization
@@ -23,4 +27,22 @@ dest_protocol :
 dest_port : 
 
 """
+input_csv_acl_lines = "./output/INTERCONNECT-all_acl_lines_OLD.csv"
 
+def main():
+	
+	print("Read in ACL csv file to global dictionary")
+	# Read in export CSV from split_acl.py set to global dictionary
+	acl_lines = dict()
+	print(input_csv_acl_lines)
+	count = 0
+	with open(input_csv_acl_lines, 'rb') as infile:
+
+		reader = csv.DictReader(infile)
+		for row in reader:
+			#pprint(row)
+			count += 1
+			acl_lines[count] = row
+	print(acl_lines)
+if __name__ == "__main__":
+	main()
