@@ -139,6 +139,18 @@ def is_obj_string(obj):
 		else:
 			return False
 
+def is_obj_int(obj):	
+	if python3 == True:
+		if isinstance(obj, int)== True:
+			return True
+		else:
+			return False
+	else: # Python 2
+		if isinstance(obj, (int, long))== True:
+			return True
+		else:
+			return False
+
 
 def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction):
 	"""
@@ -354,9 +366,12 @@ def export_dict_to_csv(extracted_acl_lines):
 						dst_next_hop_intf = ''
 						dst_next_hop_ip = ''
 						dst_next_hop_prio = ''
-						acl_dst_cidr = acl_dst_host_id + "/" + str(netmask_to_cidr(acl_dst_host_sn))
+						if is_obj_int(acl_dst_host_sn):
+							acl_dst_cidr = acl_dst_host_id + "/" + str(netmask_to_cidr(acl_dst_host_sn))
+						else:
+							acl_dst_cidr = acl_dst_host_id + "/" + acl_dst_host_sn
 						#print(acl_dst_cidr)
-						if CALCULATE_NEXT_HOP_INFO == True:
+						if CALCULATE_NEXT_HOP_INFO == True and is_obj_int(acl_dst_host_sn):
 							try:
 								dst_next_hop_info = get_ip_next_hop(network_routes, acl_dst_cidr)
 								if (debug):
@@ -407,9 +422,9 @@ def get_og_content(parse, og_name, og_type):
 	# Get flattened list of items (nested groups splitted-out)
 	og_items = list_all_object_group_items(parse, og_name, og_type)
 	for og_item in og_items:
-		og_rows_processed = og_rows_processed + 1
+		og_rows_processed += 1
 		if (debug):
-			print("OG_ROW_PROCESSING : "), og_rows_processed
+			print("OG_ROW_PROCESSING : ", og_rows_processed)
 		og_item_words_total = len(og_item.split())
 		og_item_words = og_item.split()
 		og_dst_ports = ''	
@@ -418,7 +433,7 @@ def get_og_content(parse, og_name, og_type):
 		if og_type == 'network':
 			if og_item_words[0] != 'description' and og_item_words[0] != 'group-object' :
 				# Check wether new object, group is used or valid IPv4 address
-				if is_ipv4(og_item_words[1]):
+				if is_ipv4(og_item_words[1]) or og_item_words[1] == '0.0.0.0' or og_item_words[1] == '255.255.255.255':
 					# 2nd and 3rd word are subnet and netmask
 					new_dict_line = {'host_id': og_item_words[1], 'subnet': og_item_words[2]}
 					all_og_items_return[og_rows_processed] = new_dict_line	
@@ -441,8 +456,8 @@ def get_og_content(parse, og_name, og_type):
 				elif og_item_words[1] == 'network':
 					print("ERROR : TODO NETWORK TYPE" + og_item)
 				else:
-					raise ValidationError("ERROR: object-group type " + og_item_words[1] + " not found" + og_type, "get_og_content")
-					print("ERROR: object-group type " + og_item_words[1] + " not found" + og_type)
+					raise ValidationError("ERROR: object-group type " + og_item_words[1] + "  " + og_item_words[2] + " not found for type " + og_type, "get_og_content")
+					print("ERROR: object-group type " + og_item_words[1] + og_item_words[2] + " not found for type : " + og_type)
 
 			# Return Dict
 			#new_dict_line = {'host_id': og_item_words[1], 'subnet': og_dst_ports}
@@ -1079,7 +1094,8 @@ def read_config_files(input_dir):
 	# This is the path where you want to search
 	path = input_dir
 	# this is the extension you want to detect
-	extension = '.conf'
+	#extension = '.confg'
+	extension = ''
 	for root, dirs_list, files_list in os.walk(path):
 		for file_name in files_list:
 			if os.path.splitext(file_name)[-1] == extension:

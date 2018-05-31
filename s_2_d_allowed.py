@@ -2,12 +2,19 @@
 from __future__ import unicode_literals
 import sys
 import os									# Used for IP - Route match
-#from __routing__ import *							# Used for nexthop information
+import re
+from ___cidr_convert___ import *
 from collections import OrderedDict
 import csv
 from pprint import pprint
 
+from netaddr import IPNetwork, IPAddress
+
+
 debug = False
+FIND_DIRECT_LINES_ONLY = False 			# When enabled, only direct host matches are exported, only also subnet check will be performed
+
+
 
 #Check Python version
 if sys.version_info[0] >= 3:
@@ -36,6 +43,11 @@ ToDo:
 """
 input_csv_acl_lines = "./output/DEVICENAME-all_acl_lines.csv"
 input_destination_MenM_export = "./input/MenM-Export.csv"
+
+#Generate output file, based on input
+# >>> NEED TO CHANGE ! : MUST BE : MATCHES_OF_import_file_name_and_destination_file_name.csv
+new_csv_file = strip_csv_from_filename(input_destination_MenM_export)
+new_csv_file = new_csv_file + "_with_acl_lines.csv"
 
 
 def read_csv_acl_lines(inputfile):
@@ -88,6 +100,20 @@ def strip_csv_from_filename(inputfile):
 	filename, file_extension = os.path.splitext(inputfile)
 	return filename
 
+def is_ipv4(ip):
+	match = re.match("^(\d{0,3})\.(\d{0,3})\.(\d{0,3})\.(\d{0,3})$", ip)
+	if not match:
+		return False
+	quad = []
+	for number in match.groups():
+		quad.append(int(number))
+	if quad[0] < 1:
+		return False
+	for number in quad:
+		if number > 255 or number < 0:
+			return False
+	return True
+
 def find_matching_destination_lines(find_IP):
 	"""
 
@@ -108,10 +134,19 @@ def find_matching_destination_lines(find_IP):
 	else:
 		for key, value in acl_lines.iteritems():
 			#pprint(value)
-			if value[10] == find_IP:
+			if value[11] == '255.255.255.255' and (value[10] == find_IP):
+				#Host match
 				matched_lines += 1
 				matching_acl_line = value[0]
 				matched_acl_dict[matched_lines] = value
+			elif is_ipv4(value[11]) and value[11] != '255.255.255.255' and is_ipv4(find_IP) and FIND_DIRECT_LINES_ONLY == False:
+				#Try match on subnet, first set IP to CIDR
+				acl_dst_cidr = value[10] + "/" + str(netmask_to_cidr(value[11]))
+				if IPAddress(find_IP) in IPNetwork(acl_dst_cidr):
+					#print(" CHECK IP " + find_IP + " ON NETWORK : " + acl_dst_cidr)
+					matched_lines += 1
+					matching_acl_line = value[0]
+					matched_acl_dict[matched_lines] = value					
 	return matched_acl_dict
 
 def main():
@@ -140,8 +175,6 @@ def main():
 	###### <<<<< CHECK SUBNET MATCHING!!!!!!
 	#destination_IPs = OrderedDict(sorted(destination_IPs.items()))
 
-	new_csv_file = strip_csv_from_filename(input_destination_MenM_export)
-	new_csv_file = new_csv_file + "_with_acl_lines.csv"
 	print("export to: " + new_csv_file)
 
 	print("start matching lines...")
