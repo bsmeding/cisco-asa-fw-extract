@@ -1,5 +1,6 @@
 ./*.csv
-/output/*
+/acl_output/*
+/conf_input/*
 /input/*
 /old/*
 *.pyc

@@ -2,18 +2,15 @@
 from __future__ import unicode_literals
 
 import os
+import glob
 import sys
 import re
 import itertools							# To combine list and all permutations
-
-
+import csv 						# CSV Export 
 from __routing__ import *
 from pprint import pprint
 from ciscoconfparse import CiscoConfParse
-
-import csv 						# CSV Export 
-
-
+#import six						# Check Python 2 and 3 for type string # six module not installed by default
 
 # Import ipaddress library based on Python version (2.x of 3.2 = ipaddr >3.2 ipaddres) used to calculate ip addresses in range
 try:
@@ -47,8 +44,11 @@ CREATE_DICT = True 				# Maybe remove! Default: True
 #input_config_file = "confsmall.conf" 
 input_config_file = "ciscoconfig.conf" 
 
+input_dir = 'conf_input'
+
 #output_csv_file = "acl_seperated.csv"
-output_dir = 'output'
+output_dir = 'acl_output'
+output_dir = './' + output_dir
 
 """
 ToDo:
@@ -65,12 +65,23 @@ ToDo:
 	# 
 	#
 	# ToDo Validation
+
+# Export CSV will be:
+source_host_id : 192.168.14.15
+source_sn_id : 255.255.255.255
+source_intf: <incomming interface name, based on routing table>
+dest_host_id : 172.16.13.0
+dest_sn_id : 255.255.255.0
+dest_intf: <destination interface name, based on routing table entries>
+dest_next_hop : next IP to forward packets to
+dest_protocol : 
+dest_port : 
+
 """
 
 
 
-# Create output directory
-output_dir = './' + output_dir
+
 
 
 
@@ -112,6 +123,11 @@ def flatten( alist ):
      return newlist
 
 def is_obj_string(obj):
+# six module not installed by default
+#	if isinstance(obj, six.string_types):
+#		return True
+#	else:
+#		return False		
 	if python3 == True:
 		if isinstance(obj, str)== True:
 			return True
@@ -122,6 +138,7 @@ def is_obj_string(obj):
 			return True
 		else:
 			return False
+
 
 def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction):
 	"""
@@ -353,7 +370,8 @@ def export_dict_to_csv(extracted_acl_lines):
 								pass
 
 						# OPTIONAL CHANGE PORT NAME TO NUMBER
-						if EXPORT_CHANGE_PORT_TO_NUMBER == True and (type(acl_dst_port) is unicode or type(acl_dst_port) is str):
+
+						if EXPORT_CHANGE_PORT_TO_NUMBER == True and is_obj_string(acl_dst_port) == True:
 							
 							#print("Change port to number : " + acl_dst_port)
 							acl_dst_port_number = replace_port_name_to_number(acl_dst_port)
@@ -872,7 +890,6 @@ def replace_port_name_to_number(name):
 	#portNumber = re.sub(r'\b'+name+r'\b', lambda m: portDict.get(m.group()), name)					# This returns nothing when not found in dict
 	return portNumber
 
-
 def find_IP_in_range(start, end):
 	# Need ipaddress or ipaddr library
 	start = ip_address(start)
@@ -991,22 +1008,13 @@ def get_acl_out(parse, nameif):
 			#print(acl_name)
 			return(acl_name)
 
-def main():
-	print("Read config file")
+def extract_asa_config_file(parse):
 
-	parse = parseconfig(input_config_file)
-	pprint(parse)
 
 	#Get hostname - needed for printout and export
 	global hostname
 	hostname = ''
 	hostname = get_hostname(parse)
-
-	# Only READ IN ONCE! = Global, Reverced = True
-	# Need import of __routing__.py
-	global network_routes	
-	network_routes = dict()
-	network_routes = get_network_routes(parse, True)
 
 	# Create global dict with all acl lines
 	global extracted_acl_lines
@@ -1063,6 +1071,46 @@ def main():
 	if EXPORT_TO_CSV == True:
 		csv_output = export_dict_to_csv(extracted_acl_lines)
 		print(csv_output)
+
+
+def read_config_files(input_dir):
+	config_files = dict()
+	file_counter = 0
+	# This is the path where you want to search
+	path = input_dir
+	# this is the extension you want to detect
+	extension = '.conf'
+	for root, dirs_list, files_list in os.walk(path):
+		for file_name in files_list:
+			if os.path.splitext(file_name)[-1] == extension:
+				file_counter += 1
+				file_name_path = os.path.join(root, file_name)
+				print(file_name)
+				print(file_name_path)   # This is the full path of the filter file
+				new_dict_line = {'file_name': file_name, 'file_path': file_name_path}
+				config_files[file_counter] = new_dict_line
+	return config_files
+
+def main():
+	
+	# Get al ACL_input files
+	config_files = dict()
+	config_files = read_config_files(input_dir)
+	#print(config_files)
+	
+	# Loop trough config_files
+	for key, value in config_files.items():
+		# Read in config
+		print("Read config file : " + str(value[u'file_name']))
+		parse = parseconfig(value[u'file_path'])
+		pprint(parse)	
+		extraction = extract_asa_config_file(parse)
+		# Only READ IN ONCE! = Global, Reverced = True
+		# Need import of __routing__.py
+		global network_routes	
+		network_routes = dict()
+		network_routes = get_network_routes(parse, True)			
+	
 
 	#print("ALL ACL LINE DICT!!:")
 	#pprint(extracted_acl_lines)
