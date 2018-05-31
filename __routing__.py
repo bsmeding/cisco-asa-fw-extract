@@ -58,11 +58,16 @@ def get_ip_next_hop(network_routes, ip_cidr):
 		#print(i, route_cidr)
 		#for j in iplist:
 
-		ip_source = ipaddr.IPNetwork(ip_cidr)
-		ip_route = ipaddr.IPNetwork(route_cidr)
-		#print(ip_source)
-		#print(ip_route)
-		if ip_source.overlaps(ip_route):
-			#print("MATCH : " + str(ip_source) + " ==> " + str(ip_route) + " next hop : " + network_route_next_hop + " ( exit interface : " + network_route_exit_intf + " )")
-			return (network_route_next_hop, network_route_exit_intf, network_route_priority)
-			break 		# Only first match is needed. Route order must be ordered by route_cids_subnet, Reversed!
+		try:
+			ip_source = ipaddr.IPNetwork(ip_cidr)
+			ip_route = ipaddr.IPNetwork(route_cidr)
+
+			#print(ip_source)
+			#print(ip_route)
+			if ip_source.overlaps(ip_route):
+				#print("MATCH : " + str(ip_source) + " ==> " + str(ip_route) + " next hop : " + network_route_next_hop + " ( exit interface : " + network_route_exit_intf + " )")
+				return (network_route_next_hop, network_route_exit_intf, network_route_priority)
+				break 		# Only first match is needed. Route order must be ordered by route_cids_subnet, Reversed!
+		except:
+			pass
+			

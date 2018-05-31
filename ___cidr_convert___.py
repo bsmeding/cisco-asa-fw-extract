@@ -14,3 +14,7 @@ def cidr_to_netmask(cidr):
     host_bits = 32 - int(net_bits)
     netmask = socket.inet_ntoa(struct.pack('!I', (1 << 32) - (1 << host_bits)))
     return network, netmask
+
+
+
+

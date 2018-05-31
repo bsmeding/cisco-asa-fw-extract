@@ -18,7 +18,7 @@ Make file executable: chmod +x split_acl.py
 
 Edit the file with the config file name and the output file + directory (NOTE: output dir will be deleted and renewed at running!)
 * input_config_file = "ciscoconfig.conf" 
-* output_csv_file = "acl_seperated.csv"
+* output_csv_file = "acl_seperated.csv"   << Not implemented yet
 * output_dir = 'output'
 
 Edit output variables:
@@ -34,9 +34,18 @@ Edit output variables:
 Run ./split_acl.py to:
 
 * Check all incoming and outgoing access-lists (run trough interfaces)
-* For every ACL, get content and extract line-by-line to new CSV file
-* Optionally extract compact lines with object-groups to single lines so you can filter on source - destination
+* For every ACL, get content and extract line-by-line
+* Extract compact lines with object-groups to single lines so you can filter on source - destination
 * Optionally add information of destination IP/subnet routing next hop/outgoing interface
+
+
+ToDo
+====
+* Create input dir, loop trough all files (so no input file must be edited in the split_acl file)
+* Add next hop interface
+* Change port names to numbers (from input CSV)
+* Seperate file for object-group functions, this file can be run seperataly to extraxct object groups and check if OG is in use)
+* create function where input is, source - destination and check in output file what is allowed (hits on ACL lines)
 
 
 Note
