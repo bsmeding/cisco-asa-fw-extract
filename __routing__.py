@@ -1,5 +1,5 @@
 import ipaddr											# Used for IP - Route match
-from ___cidr_convert___	import netmask_to_cidr				# Convert CIDR to Network address and reverse
+from __cidr_convert__	import netmask_to_cidr				# Convert CIDR to Network address and reverse
 from collections import OrderedDict
 
 
