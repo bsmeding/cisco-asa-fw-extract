@@ -35,9 +35,10 @@ FLATTEN_NESTED_LISTS = True		# True if the output of nested lists must be extrac
 SKIP_INACTIVE = True			# True to skip lines for printing that are inactive (last word of ACL line). Default: True
 EXTEND_PORT_RANGES = True 		# When True the ranges will be added seperataly, from begin to end range port. Other it will be printed as <port_start>-<port_end>   << NEEDS TO BE CHECKED. Default: True
 CALCULATE_NEXT_HOP_INFO = False 	# Calculate next hop interface, ip and route prio. Note that this will need some time as it will calculate for each row!. Default: False
-EXPORT_CHANGE_PORT_TO_NUMBER = True 	# Default: True
+EXPORT_CHANGE_PORT_TO_NUMBER = False 	# Default: True
 SKIP_TIME_EXCEEDED = False		# Skip rules with time-ranges that have passed by NOT IMPLEMENTED YET!!. Default: False
-debug = False 					# Debug mode - high print output! Default: False
+debug = True 					# Debug mode - high print output! Default: False
+debug_export = False
 CREATE_DICT = True 				# Maybe remove! Default: True
 #EXPORT_ACL_SEPERATE_FILES = False 	# Export each ACL to separate file
 
@@ -267,6 +268,10 @@ def export_dict_to_csv(extracted_acl_lines):
 			writer = csv.writer(csv_file)
 			writer.writerow(csv_columns)
 			for key, item in extracted_acl_lines.items():
+				print(item)
+				print(str(item['acl_dst_ports']))
+				print(str(item['acl_dst_ports_og']))
+				print("extracted_acl_lines destination poort (begin export) : " + str(item['acl_dst_ports_og_items_list']))
 				acl_line_child = 0
 				#Create row
 				#Chech for simple line, without object-groups
@@ -280,7 +285,7 @@ def export_dict_to_csv(extracted_acl_lines):
 					if item[u'acl_protocol_og_list'] != '':
 						#loop trough OG list
 						acl_protocol_items = item[u'acl_protocol_og_list']
-						if (debug):
+						if (debug_export):
 							print("Ports in protocol OG : "), acl_protocol_items					
 
 					else:
@@ -306,7 +311,7 @@ def export_dict_to_csv(extracted_acl_lines):
 					# Create Destination port list					
 
 					if item[u'acl_dst_ports_og_items_list'] != '':
-						if (debug):
+						if (debug_export):
 							print("Dest ports in OG")
 						destination_ports = item[u'acl_dst_ports_og_items_list']
 					#elif item[u'acl_dst_ports_og_items_list'] != '':
@@ -315,7 +320,7 @@ def export_dict_to_csv(extracted_acl_lines):
 						destination_ports =  [item[u'acl_dst_ports']]
 
 
-					if (debug):
+					if (debug_export):
 						print("Source IP in OG : "), source_ips	
 						print("Destination IP's "), destination_ips			
 						print("Protocol ports "), acl_protocol_items
@@ -326,7 +331,7 @@ def export_dict_to_csv(extracted_acl_lines):
 					else:
 						acl_source_destination_port_list = list(itertools.product(source_ips, destination_ips, destination_ports))	
 					
-					if (debug):
+					if (debug_export):
 						print("ACL Source - Destination - Portlist")
 						pprint(acl_source_destination_port_list )
 						print("")
@@ -362,6 +367,8 @@ def export_dict_to_csv(extracted_acl_lines):
 						else:
 							acl_protocol = item[u'acl_protocol']
 
+
+						print("ACL DST PORT : " + str(acl_dst_port))
 						# Calculate next hop and outgoing interface based on destination CIDR
 						dst_next_hop_intf = ''
 						dst_next_hop_ip = ''
@@ -374,7 +381,7 @@ def export_dict_to_csv(extracted_acl_lines):
 						if CALCULATE_NEXT_HOP_INFO == True and is_obj_int(acl_dst_host_sn):
 							try:
 								dst_next_hop_info = get_ip_next_hop(network_routes, acl_dst_cidr)
-								if (debug):
+								if (debug_export):
 									print("ACL NEXT HOP INFO. Host " + acl_dst_host_id + " - SN:" +  acl_dst_host_sn + " CIDR " + acl_dst_cidr), 
 									print(dst_next_hop_info)
 								
@@ -401,7 +408,7 @@ def export_dict_to_csv(extracted_acl_lines):
 							acl_source_host_id, acl_source_host_sn, acl_dst_host_id, acl_dst_host_sn, acl_dst_port_number, acl_protocol,\
 							dst_next_hop_intf, dst_next_hop_ip, dst_next_hop_prio, \
 							item[u'original_acl_line'])
-						if (debug):
+						if (debug_export):
 							print("NEW DICT TO CSV LINE: "),
 							print(new_csv_row)
 						writer.writerow(new_csv_row)
