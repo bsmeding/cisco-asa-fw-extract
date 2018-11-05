@@ -22,15 +22,17 @@ except ImportError:
 #Check Python version
 if sys.version_info[0] >= 3:
 	python3 = True
+	open_csv_writemode = 'w'
 else:
 	python3 = False
+	open_csv_writemode = 'wb'
 
 import pandas as pd
 
 
 PRINT_REMARKS = False			# True for print to screen, False no print to screen. Default: False
 PRINT_LINES = False 			# Print line info. Default: False
-EXPORT_TYPE = 'excel' 			# Export ACL Lines to 'excel' or to 'csv'. Default: csv
+EXPORT_TYPE = 'csv' 			# Export ACL Lines to 'excel' or to 'csv'. Default: csv
 EXPORT_TO_TABS = True 			# In case of excel, export each ACL to new TAB 
 EXPORT_REMARKS = False 			# Skip the remark lines in export output. Default: False
 EXPORT_ORIGINAL_LINE = True 	# Export the original ACL line (takes longer, and more export data). Default: True
@@ -456,7 +458,7 @@ def create_og_dict(parse):
 		og_dict[og_name]={'og_type': 'service', 'desciption': o_item_desc, 'network_objects_list': [], 'service_tcp_ports_list': tcp_ports_list,  'service_udp_ports_list': udp_ports_list, 'service_protocol_only_list': protocol_only_list, 'service_icmp_ports_list': icmp_ports_list,'sub_og_list': sub_og_list}
 
 
-	print("PROTOCOL OGs " + str(og_protocol_items))
+	#print("PROTOCOL OGs " + str(og_protocol_items))
 	for og_protocol_item in og_protocol_items:
 		protocol_only_list = list()
 		og_rows_processed += 1
@@ -476,7 +478,7 @@ def create_og_dict(parse):
 			og_item_words = og_item.split()	
 			if og_item_words[0] == 'protocol-object':
 				og_items_processed += 1
-				print("Protocol object! : " + str(og_item_words[1]))
+				#print("Protocol object! : " + str(og_item_words[1]))
 				protocol_only_list.append(og_item_words[1]) 
 			elif  og_item_words[0] == 'object-group':
 				# This is parent row
@@ -829,7 +831,7 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 							acl_dst_port_icmp.append(replace_port_name_to_number(acl_line_words[1]))	
 						else:
 							print(original_acl_line)
-							status_update("ERROR! Destination port not combined with protoco list : " + str(acl_original) , True, 'critical', debug)
+							status_update("ERROR! Destination port not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
 
 					elif acl_line_words[0] == "range":
 						range_start = int(replace_port_name_to_number(acl_line_words[1]))
@@ -843,8 +845,21 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 								elif acl_protocol == 'icmp':
 									acl_dst_port_icmp.append(i)	
 								else:
-									print(original_acl_line)
-									status_update("ERROR! Destination port RANGE not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
+									if acl_dst_port_protocol != '':
+										for item in acl_dst_protocol:
+											if item == 'tcp':
+												acl_dst_port_tcp.append(i)
+											elif item == 'udp':
+												acl_dst_port_udp.append(i)
+											elif item == 'icmp':
+												acl_dst_port_icmp.append(i)	
+											else:
+												print("ERROR! protocol not found")
+
+									else:			
+										print(original_acl_line)
+										print(acl_dst_port_protocol)
+										status_update("ERROR! Destination port RANGE not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
 						except:
 							if acl_protocol == 'tcp':
 								acl_dst_port_tcp.append(str(range_start) +"-"+ str(range_end))
@@ -873,12 +888,13 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 
 					else:
 						
-						status_update("END OF ACL LINE NO MATCH FOUND FOR : " + str(acl_line_words[0]) + " on line " + str(original_acl_line) , True, 'critical', debug)
+						status_update("POSSIBLE END OF ACL LINE NO MATCH FOUND FOR : " + str(acl_line_words[0]) + " on line " + str(original_acl_line) , True, 'critical', debug)
 						parsed_acl_lines -= 1			
 						parsed_unknown_lines += 1
 
 					#Eventually destination port or port-groups (group-object) same loop as above <<
 					if acl_line != '':
+
 						acl_line_words = acl_line.split()
 						if acl_line_words[0] == "eq":
 							if acl_protocol == 'tcp':
@@ -888,6 +904,8 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 							elif acl_protocol == 'icmp':
 								acl_dst_port_icmp.append(replace_port_name_to_number(acl_line_words[1]))	
 							else:
+								print(acl_line)
+								print(original_acl_line)
 								status_update("ERROR! Destination port not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
 
 						elif acl_line_words[0] == "range":
@@ -902,7 +920,21 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 									elif acl_protocol == 'icmp':
 										acl_dst_port_icmp.append(i)	
 									else:
-										status_update("ERROR! Destination port not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
+										if acl_dst_port_protocol != '':
+												for item in acl_dst_protocol:
+													if item == 'tcp':
+														acl_dst_port_tcp.append(i)
+													elif item == 'udp':
+														acl_dst_port_udp.append(i)
+													elif item == 'icmp':
+														acl_dst_port_icmp.append(i)	
+													else:
+														print("ERROR! protocol not found")
+
+										else:			
+											print(original_acl_line)
+											print(acl_dst_port_protocol)
+											status_update("ERROR! Destination port not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
 							except:
 								if acl_protocol == 'tcp':
 									acl_dst_port_tcp.append(str(range_start) +"-"+ str(range_end))
@@ -1093,7 +1125,7 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 def export_acl_dict(hostname, export_dict):
 	global output_dir
 	export_dir = os.path.join(output_dir, '')
-	export_file = export_dir + hostname + '-all_acl_lines.xlsx'
+	export_file = export_dir + hostname + '-all_acl_lines'
 	#print("Start export of ACL for device  " + str(hostname) + " to " + str(export_file))
 	#Delete file if exist
 	if not os.path.exists(export_dir):
@@ -1106,7 +1138,7 @@ def export_acl_dict(hostname, export_dict):
 			pass
 
 	if (EXPORT_TYPE == 'excel'):
-		writer = pd.ExcelWriter(export_file)
+		writer = pd.ExcelWriter(export_file + '.xlxs')
 		df = pd.DataFrame
 		for key, value in export_dict.items():
 			status_update("Export to Excel  : " + str(hostname) + " - acl : " + str(key) , True, 'info', debug)
@@ -1121,7 +1153,35 @@ def export_acl_dict(hostname, export_dict):
 
 		writer.save()
 	else:
-		print("Export to CSV")
+		csv_columns = ['acl_line_number', 'acl_line_child', 'acl_interface', 'acl_direction', 'acl_name', \
+				'inactive', 'acl_type', \
+				'acl_source_cidr', 'acl_dst_cidr', 'acl_dst_port', 'acl_protocol', \
+				'dst_interface', 'dst_next_hop', 'dst_next_hop_prio', \
+				'original_acl_line']
+		with open(export_file + '.csv', open_csv_writemode) as csv_file:
+			writer = csv.writer(csv_file)
+			writer.writerow(csv_columns)
+			
+			# Temporary
+			dst_next_hop_intf = ''
+			dst_next_hop_ip = ''
+			dst_next_hop_prio = ''
+
+			for key, value in export_dict.items():
+				print(key)
+				for key2, item in value.items():
+
+					#print(item)
+					new_csv_row = (int(item['acl_line_number']), item['acl_line_child'], item['acl_interface'], item['acl_direction'], key, \
+						item['inactive'], item['acl_type'],  \
+						item['acl_source_cidr'], item['acl_dst_cidr'], item['acl_dst_port'], item['acl_dst_protocol'], \
+						dst_next_hop_intf, dst_next_hop_ip, dst_next_hop_prio, \
+						item['original_acl_line'])
+					if (debug_export):
+						print("NEW DICT TO CSV LINE: "),
+						print(new_csv_row)
+					writer.writerow(new_csv_row)
+
 
 def extract_asa_config_file(parse):
 
