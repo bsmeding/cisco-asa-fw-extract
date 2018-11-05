@@ -128,11 +128,6 @@ def flatten( alist ):
      return newlist
 
 def is_obj_string(obj):
-# six module not installed by default
-#	if isinstance(obj, six.string_types):
-#		return True
-#	else:
-#		return False		
 	if python3 == True:
 		if isinstance(obj, str)== True:
 			return True
@@ -155,9 +150,6 @@ def is_obj_int(obj):
 			return True
 		else:
 			return False
-
-
-			
 
 def replace_port_name_to_number(name):
 	# Note portDict is read in Globally from CSV file!
@@ -186,11 +178,8 @@ def read_config_files(input_dir):
 				config_files[file_counter] = new_dict_line
 	return config_files
 
-
-
-### HIER ONDERR NIEUWE FUNCTIES, BOVENSTAANDE ZIJN BESTAANDE SPLIT_ACL FUNCTIES! NIET WIJZIGEN!!!
-
 def create_og_dict(parse):
+	#print(">>>>>>>>>>>>>>>>>> OPMAKEN OG_DICT")
 	#Opmaken object dictionary alleen met objects (objet-group is apart) dit gaat PER config en wordt dus alleen met analyze geladen.
 	og_dict = dict()			# Dict met alle object-groups
 	og_network_dict = dict()	# Dict met alleen netweork object-groups
@@ -198,10 +187,11 @@ def create_og_dict(parse):
 
 
 
-	og_items = parse.find_objects("^object-group")
+	og_items = parse.find_objects("^object-group ")
 	og_network_items = parse.find_objects('^object-group network\s')
 	og_service_items = parse.find_objects('^object-group service\s')
 	og_protocol_items = parse.find_objects('^object-group protocol\s')
+	#pprint(og_service_items)
 	#print(len(og_network_items))
 	#print(len(og_service_items))
 	#print("totaal : " + str((len(og_network_items) + len(og_service_items) ))) 
@@ -224,8 +214,7 @@ def create_og_dict(parse):
 		og_items_processed = 0									# Nu op 0 zetten, per regel ophoven en aan einde van de loop controleren of even veel is
 		# In OG_children zit ook de OG naam
 		og_name = og_children[0]
-		if (og_children[0] == 'DM_INLINE_SERVICE_19'):
-			print("OG NAAM: " + str(og_children[0]))
+
 		o_item_desc = ''
 		for og_item in og_children:
 			subnet_cidr = ''
@@ -273,7 +262,7 @@ def create_og_dict(parse):
 		
 		og_name = og_name[len("object-group network "):]
 		#print(og_name)
-		og_network_dict[og_name]={'desciption': o_item_desc, 'network_objects_list': network_objects, 'sub_og_list': sub_og_list}
+		#og_network_dict[og_name]={'desciption': o_item_desc, 'network_objects_list': network_objects, 'sub_og_list': sub_og_list}
 		og_dict[og_name]={'og_type': 'network', 'desciption': o_item_desc, 'network_objects_list': network_objects, 'service_tcp_ports_list': tcp_ports_list,  'service_udp_ports_list': udp_ports_list, 'service_protocol_only_list': protocol_only_list, 'service_icmp_ports_list': icmp_ports_list,'sub_og_list': sub_og_list}
 
 
@@ -288,13 +277,14 @@ def create_og_dict(parse):
 		protocol_only_list = list()
 		icmp_ports_list = list()
 		sub_og_list = list()									# Nested object-groups in list form
-		if (debug):
-			print("OG_ROW_PROCESSING : ", og_rows_processed)
+		
 		og_children = parse.find_all_children(og_service_item.text, exactmatch=True)
 		og_items_to_process = len(og_children)					# Voor validatie dat we alle regels processen
 		og_items_processed = 0									# Nu op 0 zetten, per regel ophoven en aan einde van de loop controleren of even veel is
 		# In OG_children zit ook de OG naam
 		og_name = og_children[0]
+		if (debug):
+			print("OG_ROW_PROCESSING : " +  str(og_rows_processed) + " Name " + str(og_name) )
 		og_name_items = og_name.split()
 		port_og = False
 		if len(og_name_items) >3:
@@ -306,7 +296,7 @@ def create_og_dict(parse):
 			subnet_cidr = ''
 			host_cidr = ''
 			
-
+			#print(og_item)
 			#if (debug):
 			#print(og_item)
 			og_item_words = og_item.split()		
@@ -317,68 +307,69 @@ def create_og_dict(parse):
 			elif og_item_words[0] == 'port-object':
 				
 				#dan moet ook port_og_protocol bekend zijn, dit kunnen alleen items van hetzelfde protocol zijn
-				if (port_og):
-					#Nu achterhalen of het een enkele poort of een range is
-					if og_item_words[1] == 'eq':
-						#Enkele poort
-						og_port = og_item_words[2]
-						
-						if is_obj_string(og_port) == True:
-							og_port_number = replace_port_name_to_number(og_port)
-						else:
-							og_port_number = og_port_number
-						if port_og_protocol == 'tcp':
-							tcp_ports_list.append(og_port_number)
-							og_items_processed += 1
-						elif port_og_protocol == 'udp':
-							udp_ports_list.append(og_port_number)
-							og_items_processed += 1
-						elif port_og_protocol == 'icmp':
-							icmp_ports_list.append(og_port_number)
-							og_items_processed += 1
-						elif port_og_protocol == 'ip' or port_og_protocol == 'esp':
-							protocol_only_list.append(port_og_protocol)
-							og_items_processed += 1
-						elif port_og_protocol == 'tcp-udp':
-							tcp_ports_list.append(og_port_number)
-							udp_ports_list.append(og_port_number)
-							og_items_processed += 1							
-						else:
-							status_update("ERROR! port-object groep gevonden maar geen items! " + str(port_og_protocol) + " port " + str(og_port_number) , False, 'critical', debug)
-							
-						#print("port: " + str(og_port) + "( " + acl_dst_port_number + " )")
-					elif og_item_words[1] == 'range':
-						try:
-							range_start = int(replace_port_name_to_number(og_item_words[2]))
-							range_end = int(replace_port_name_to_number(og_item_words[3]))
-							for i in range(range_start, range_end+1):
-								if port_og_protocol == 'tcp':
-									tcp_ports_list.append(i)
-								elif port_og_protocol == 'udp':
-									udp_ports_list.append(i)
-								elif port_og_protocol == 'icmp':
-									icmp_ports_list.append(i)
-								else:
-									protocol_only_list.append(port_og_protocol)
-								og_items_processed += 1
-						except:
-							#Fallback if protocol name not resolvable is to a number
-							if port_og_protocol == 'tcp':
-								tcp_ports_list.append(str(range_start) + "-" + str(range_end))
-							elif port_og_protocol == 'udp':
-								udp_ports_list.append(str(range_start) + "-" + str(range_end))
-							elif port_og_protocol == 'icmp':
-								icmp_ports_list.append(str(range_start) + "-" + str(range_end))							
-						
-						status_update("Range in " + str(og_name) + " deze uit elkaar halen :" + str(og_item_words[2]) + "-"+ str(og_item_words[3]) , False, 'info', debug)
-							
+				#if (port_og):
+				#	#Nu achterhalen of het een enkele poort of een range is
+				if og_item_words[1] == 'eq':
+					#Enkele poort
+					og_port = og_item_words[2]
+					
+					if is_obj_string(og_port) == True:
+						og_port_number = replace_port_name_to_number(og_port)
 					else:
-						status_update("Geen port-objects gevonden voor " +str(og_item_words[1]) , False, 'warning', debug)
-
+						og_port_number = og_port_number
+					if port_og_protocol == 'tcp':
+						tcp_ports_list.append(og_port_number)
+						og_items_processed += 1
+					elif port_og_protocol == 'udp':
+						udp_ports_list.append(og_port_number)
+						og_items_processed += 1
+					elif port_og_protocol == 'icmp':
+						icmp_ports_list.append(og_port_number)
+						og_items_processed += 1
+					elif port_og_protocol == 'ip' or port_og_protocol == 'esp':
+						protocol_only_list.append(port_og_protocol)
+						og_items_processed += 1
+					elif port_og_protocol == 'tcp-udp':
+						tcp_ports_list.append(og_port_number)
+						udp_ports_list.append(og_port_number)
+						og_items_processed += 1							
+					else:
+						status_update("ERROR! port-object groep gevonden maar geen items! " + str(port_og_protocol) + " port " + str(og_port_number) , False, 'critical', debug)
+						
+					#print("port: " + str(og_port) + "( " + acl_dst_port_number + " )")
+				elif og_item_words[1] == 'range':
+					try:
+						range_start = int(replace_port_name_to_number(og_item_words[2]))
+						range_end = int(replace_port_name_to_number(og_item_words[3]))
+						for i in range(range_start, range_end+1):
+							if port_og_protocol == 'tcp':
+								tcp_ports_list.append(i)
+							elif port_og_protocol == 'udp':
+								udp_ports_list.append(i)
+							elif port_og_protocol == 'icmp':
+								icmp_ports_list.append(i)
+							else:
+								protocol_only_list.append(port_og_protocol)
+							og_items_processed += 1
+					except:
+						#Fallback if protocol name not resolvable is to a number
+						if port_og_protocol == 'tcp':
+							tcp_ports_list.append(str(range_start) + "-" + str(range_end))
+						elif port_og_protocol == 'udp':
+							udp_ports_list.append(str(range_start) + "-" + str(range_end))
+						elif port_og_protocol == 'icmp':
+							icmp_ports_list.append(str(range_start) + "-" + str(range_end))							
+					
+					status_update("Range in " + str(og_name) + " deze uit elkaar halen :" + str(og_item_words[2]) + "-"+ str(og_item_words[3]) , False, 'info', debug)
+						
 				else:
-					status_update("ERROR! Wel port-object maar geen og_protocol gevonden" , False, 'critical', debug)
+					status_update("Geen port-objects gevonden voor " +str(og_item_words[1]) , False, 'warning', debug)
+
+				#else:
+				#	status_update("ERROR! Wel port-object maar geen og_protocol gevonden" , False, 'critical', debug)
 			elif og_item_words[0] == 'service-object':
 				#print(og_item)
+
 				#Service object, deze bevatten zowel protocol als port en evt een range
 				port_og_protocol = og_item_words[1]
 				if len(og_item_words) <3:
@@ -433,7 +424,9 @@ def create_og_dict(parse):
 							og_items_processed += 1
 						#print("Range in " + str(og_name) + " deze uit elkaar halen :" + str(range_start) + "-"+ str(range_end))
 					else:
-						print("Geen service-objects gevonden voor " + str(port_og_protocol) + "  in " + str(og_item))
+						print("No service-objects found for " + str(port_og_protocol) + "  in " + str(og_item))
+
+
 
 			elif og_item_words[0] == 'group-object':
 				# Dit is de regel zelf, die wordt met Children nog een keer weergegeven. Deze wel tellen, maar niets mee doen
@@ -449,11 +442,20 @@ def create_og_dict(parse):
 				# Dit is de regel zelf, die wordt met Children nog een keer weergegeven. Deze wel tellen, maar niets mee doen
 				og_items_processed += 1
 				if og_item != og_service_item.text:
-					print("andere OG nested: " + str(og_item) + "  in " + str(og_service_item.text) + " og_name: " + str(og_name))
+					print("other OG nested: " + str(og_item) + "  in " + str(og_service_item.text) + " og_name: " + str(og_name))
 
 			else:
-				print("ERROR! Geen og_functie voor child: " + str(og_item_words[0]))
+				print("ERROR! NO og_functie for child: " + str(og_item_words[0]))
 				print(og_children)
+
+
+		og_name = og_name[len("object-group service "):]
+		og_name = og_name.split(' ',1)[0]
+		#og_service_dict[og_name]={'desciption': o_item_desc, 'network_objects_list': network_objects, 'sub_og_list': sub_og_list}
+		#print(og_name)
+		og_dict[og_name]={'og_type': 'service', 'desciption': o_item_desc, 'network_objects_list': [], 'service_tcp_ports_list': tcp_ports_list,  'service_udp_ports_list': udp_ports_list, 'service_protocol_only_list': protocol_only_list, 'service_icmp_ports_list': icmp_ports_list,'sub_og_list': sub_og_list}
+
+
 
 	for og_protocol_item in og_protocol_items:
 		protocol_only_list = list()
@@ -462,6 +464,7 @@ def create_og_dict(parse):
 		sub_og_list = list()									# Nested object-groups in list form
 		if (debug):
 			print("OG_ROW_PROCESSING : ", og_rows_processed)
+		
 		og_children = parse.find_all_children(og_protocol_item.text, exactmatch=True)
 		og_items_to_process = len(og_children)					# Voor validatie dat we alle regels processen
 		og_items_processed = 0									# Nu op 0 zetten, per regel ophoven en aan einde van de loop controleren of even veel is
@@ -484,6 +487,12 @@ def create_og_dict(parse):
 				print("NO Protocol object found!")
 			#protocol_only_list.append(port_og_protocol)
 
+		og_name = og_name[len("object-group protocol "):]
+		#print(og_name)
+		#og_service_dict[og_name]={'desciption': o_item_desc, 'network_objects_list': network_objects, 'sub_og_list': sub_og_list}
+		og_dict[og_name]={'og_type': 'protocol', 'desciption': o_item_desc, 'network_objects_list': [], 'service_tcp_ports_list': [],  'service_udp_ports_list': [], 'service_protocol_only_list': protocol_only_list, 'service_icmp_ports_list': icmp_ports_list,'sub_og_list': sub_og_list}
+
+
 	#pprint(og_dict)
 	return og_dict
 
@@ -502,23 +511,17 @@ def get_nameif_interfaces(parse):
 def get_acl_in(parse, nameif):
 	#active_acls = parse.find_objects(r'accesss-group\s+(.*)\s+in\s+interface')
 	for acl in parse.find_objects(r'access-group\s'):
-		#print(acl)
 		if nameif in acl.text and 'in interface' in acl.text:
-			#print(acl.text)
 			acl_name = acl.text
 			acl_name = acl_name.split(' ', 2)[1]
-			#print(acl_name)
 			return(acl_name)
 
 def get_acl_out(parse, nameif):
 	#active_acls = parse.find_objects(r'accesss-group\s+(.*)\s+in\s+interface')
 	for acl in parse.find_objects(r'access-group\s'):
-		#print(acl)
 		if nameif in acl.text and 'out interface' in acl.text:
-			#print(acl.text)
 			acl_name = acl.text
 			acl_name = acl_name.split(' ', 2)[1]
-			#print(acl_name)
 			return(acl_name)
 
 def intf_acl_to_dict(parse):
@@ -713,8 +716,8 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 						acl_line, acl_logging_severity = acl_line.split(' log ',1)
 					except:
 						pass
-					#print(acl_logging_severity)
-					print(acl_line)
+						print(acl_logging_severity)
+						print(acl_line)
 				
 				#number of object-groups
 				acl_line_words = acl_line.split()
@@ -727,7 +730,6 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 				og_network = 0
 				og_port = 0
 				
-
 
 				og_in_acl_line = acl_line.count("object-group")
 				acl_type = acl_line_words[0]
