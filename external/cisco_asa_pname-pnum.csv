@@ -20,6 +20,7 @@ http,80
 https,443
 ident,113
 imap4,143
+isakmp,500
 irc,194
 kerberos,88
 klogin,543
@@ -29,9 +30,12 @@ ldaps,636
 login,513
 lotusnotes,1352
 lpd,515
+netbios-ns,137
+netbios-dgm,138
 netbios-ssn,139
 nfs,2049
 nntp,119
+ntp,123
 pcanywhere-data,5631
 pim-auto-rp,496
 pop2,109
@@ -40,15 +44,17 @@ pptp,1723
 rsh,514
 rtsp,554
 sip,5060
-snmp, 161
-snmptrap, 162
+snmp,161
+snmptrap,162
 smtp,25
 sqlnet,1522
 ssh,22
 sunrpc,111
+syslog,514
 tacacs,49
 talk,517
 telnet,23
+tftp,69
 uucp,540
 whois,43
 www,80
