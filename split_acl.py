@@ -30,7 +30,7 @@ import pandas as pd
 
 PRINT_REMARKS = False			# True for print to screen, False no print to screen. Default: False
 PRINT_LINES = False 			# Print line info. Default: False
-EXPORT_TYPE = 'csv' 			# Export ACL Lines to 'excel' or to 'csv'. Default: csv
+EXPORT_TYPE = 'excel' 			# Export ACL Lines to 'excel' or to 'csv'. Default: csv
 EXPORT_TO_TABS = True 			# In case of excel, export each ACL to new TAB 
 EXPORT_REMARKS = False 			# Skip the remark lines in export output. Default: False
 EXPORT_ORIGINAL_LINE = True 	# Export the original ACL line (takes longer, and more export data). Default: True
@@ -224,7 +224,7 @@ def create_og_dict(parse):
 		og_items_processed = 0									# Nu op 0 zetten, per regel ophoven en aan einde van de loop controleren of even veel is
 		# In OG_children zit ook de OG naam
 		og_name = og_children[0]
-		if (debug):
+		if (og_children[0] == 'DM_INLINE_SERVICE_19'):
 			print("OG NAAM: " + str(og_children[0]))
 		o_item_desc = ''
 		for og_item in og_children:
@@ -568,6 +568,7 @@ def get_network_og_items(og_name, acl_og_items):
 	return flatten( acl_og_items )
 
 def get_service_og_items(og_name):
+	global og_dict
 	global acl_dst_port_tcp
 	global acl_dst_port_udp
 	global acl_dst_port_protocol
@@ -589,6 +590,7 @@ def get_service_og_items(og_name):
 		
 	except:
 		pass 
+		#print(og_dict.get(og_name))
 		print("ERROR! NO service group objects extract from " + str(og_name))
 
 	return acl_dst_port_tcp, acl_dst_port_udp, acl_dst_port_protocol, acl_dst_port_icmp, sub_og_list
@@ -1107,6 +1109,7 @@ def export_acl_dict(hostname, export_dict):
 
 	if (EXPORT_TYPE == 'excel'):
 		writer = pd.ExcelWriter(export_file)
+		df = pd.DataFrame
 		for key, value in export_dict.items():
 			status_update("Export to Excel  : " + str(hostname) + " - acl : " + str(key) , True, 'info', debug)
 			if (EXPORT_TO_TABS):
@@ -1114,6 +1117,7 @@ def export_acl_dict(hostname, export_dict):
 				df = pd.DataFrame.from_dict(value, orient='index')
 				df.to_excel(writer,key)
 			else:
+				df2 = pd.DataFrame.from_dict(value, orient='index')
 				print("Export to single tab, combine all ACLs")
 				#df.insert(0, 'Name', 'abc')
 
@@ -1207,6 +1211,8 @@ def main():
 		og_dict = dict()
 		og_dict = create_og_dict(parse)
 		
+		#print("Extracted OG_DICT")
+		#pprint(og_dict)
 		# Only READ IN ONCE! = Global, Reverced = True
 		# Need import of __routing__.py
 		global network_routes	
@@ -1215,9 +1221,6 @@ def main():
 	
 		#Extract ACL lines
 		extraction = extract_asa_config_file(parse)
-
-
-	
 
 
 
