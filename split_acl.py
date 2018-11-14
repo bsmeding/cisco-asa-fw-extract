@@ -749,7 +749,7 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 			
 				#print(acl_line)
 				acl_line_words = acl_line.split()
-				if acl_line_words[0] == "any" or acl_line_words[0] == "any6":
+				if acl_line_words[0] == "any" or acl_line_words[0] == "any4":
 					acl_source_cidr.append('0.0.0.0/7')
 					#print(acl_source_cidr)
 					acl_line = acl_line.split(acl_line_words[0] + ' ',1)[1]
@@ -775,7 +775,7 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 
 				#Destination adresses
 				acl_line_words = acl_line.split()
-				if acl_line_words[0] == "any" or acl_line_words[0] == "any6":
+				if acl_line_words[0] == "any" or acl_line_words[0] == "any4":
 					acl_dst_cidr.append('0.0.0.0/7')
 					#print("destination is any")
 					#Could be the end, only remove if there are more items to split
