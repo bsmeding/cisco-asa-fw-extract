@@ -40,6 +40,7 @@ debug = False 					# Debug mode - high print output! Default: False
 debug_export = False
 SHOW_ACL_EXTRACTION = False 	# Show the extraction of each ACL line,(also shown when debug enabled)
 CREATE_DICT = True 				# Maybe remove! Default: True
+EXTRACT_PORT_RANGES = False
 #EXPORT_ACL_SEPERATE_FILES = False 	# Export each ACL to separate file
 
 #input_config_file = "confsmall.conf" 
@@ -234,8 +235,8 @@ def create_og_dict(parse):
 					subnet_cidr = og_item_words[1] + "/" + str(netmask_to_cidr(og_item_words[2]))
 					network_objects.append(subnet_cidr)
 				else:
-					print("OBJECT FOUND IN OG NETWORK ")
-					print("network-object found, " + str(og_item_words[1]) + " " + str(og_item_words[2]))
+					subnet_cidr = get_object_item(parse, 'network', str(og_item_words[2]))
+					network_objects.append(subnet_cidr)
 				if (debug):
 					print("Subnet IP " + str(og_item_words[1]) + " / " + str(og_item_words[2]))
 			elif og_item_words[0] == 'network-object' and og_item_words[1] == 'host':
@@ -340,29 +341,38 @@ def create_og_dict(parse):
 						
 					#print("port: " + str(og_port) + "( " + acl_dst_port_number + " )")
 				elif og_item_words[1] == 'range':
-					try:
-						range_start = int(replace_port_name_to_number(og_item_words[2]))
-						range_end = int(replace_port_name_to_number(og_item_words[3]))
-						for i in range(range_start, range_end+1):
+					range_start = int(replace_port_name_to_number(og_item_words[2]))
+					range_end = int(replace_port_name_to_number(og_item_words[3]))
+					if EXTRACT_PORT_RANGES:
+						try:
+
+							for i in range(range_start, range_end+1):
+								if port_og_protocol == 'tcp':
+									tcp_ports_list.append(i)
+								elif port_og_protocol == 'udp':
+									udp_ports_list.append(i)
+								elif port_og_protocol == 'icmp':
+									icmp_ports_list.append(i)
+								else:
+									protocol_only_list.append(port_og_protocol)
+								og_items_processed += 1
+						except:
+							#Fallback if protocol name not resolvable is to a number
 							if port_og_protocol == 'tcp':
-								tcp_ports_list.append(i)
+								tcp_ports_list.append(str(range_start) + "-" + str(range_end))
 							elif port_og_protocol == 'udp':
-								udp_ports_list.append(i)
+								udp_ports_list.append(str(range_start) + "-" + str(range_end))
 							elif port_og_protocol == 'icmp':
-								icmp_ports_list.append(i)
-							else:
-								protocol_only_list.append(port_og_protocol)
-							og_items_processed += 1
-					except:
-						#Fallback if protocol name not resolvable is to a number
+								icmp_ports_list.append(str(range_start) + "-" + str(range_end))							
+						status_update("Range in " + str(og_name) + " deze uit elkaar halen :" + str(og_item_words[2]) + "-"+ str(og_item_words[3]) , False, 'info', debug)	
+					else:
 						if port_og_protocol == 'tcp':
 							tcp_ports_list.append(str(range_start) + "-" + str(range_end))
 						elif port_og_protocol == 'udp':
 							udp_ports_list.append(str(range_start) + "-" + str(range_end))
 						elif port_og_protocol == 'icmp':
-							icmp_ports_list.append(str(range_start) + "-" + str(range_end))							
+							icmp_ports_list.append(str(range_start) + "-" + str(range_end))											
 					
-					status_update("Range in " + str(og_name) + " deze uit elkaar halen :" + str(og_item_words[2]) + "-"+ str(og_item_words[3]) , False, 'info', debug)
 						
 				else:
 					status_update("Geen port-objects gevonden voor " +str(og_item_words[1]) , False, 'warning', debug)
@@ -411,20 +421,29 @@ def create_og_dict(parse):
 					elif og_item_words[2] == 'range':
 						range_start = int(replace_port_name_to_number(og_item_words[3]))
 						range_end = int(replace_port_name_to_number(og_item_words[4]))
-						for i in range(range_start, range_end+1):
+						if (EXTRACT_PORT_RANGES):
+
+							for i in range(range_start, range_end+1):
+								if port_og_protocol == 'tcp':
+									tcp_ports_list.append(i)
+								elif port_og_protocol == 'udp':
+									udp_ports_list.append(i)
+								elif port_og_protocol == 'tcp-udp':
+									tcp_ports_list.append(i)
+									udp_ports_list.append(i)
+								elif port_og_protocol == 'icmp':
+									icmp_ports_list.append(i)
+								else:
+									protocol_only_list.append(port_og_protocol)
+								og_items_processed += 1
+						else:
 							if port_og_protocol == 'tcp':
-								tcp_ports_list.append(i)
+								tcp_ports_list.append(str(range_start) + "-" + str(range_end))
 							elif port_og_protocol == 'udp':
-								udp_ports_list.append(i)
-							elif port_og_protocol == 'tcp-udp':
-								tcp_ports_list.append(i)
-								udp_ports_list.append(i)
+								udp_ports_list.append(str(range_start) + "-" + str(range_end))
 							elif port_og_protocol == 'icmp':
-								icmp_ports_list.append(i)
-							else:
-								protocol_only_list.append(port_og_protocol)
-							og_items_processed += 1
-						#print("Range in " + str(og_name) + " deze uit elkaar halen :" + str(range_start) + "-"+ str(range_end))
+								icmp_ports_list.append(str(range_start) + "-" + str(range_end))									
+
 					else:
 						print("No service-objects found for " + str(port_og_protocol) + "  in " + str(og_item))
 
@@ -497,6 +516,35 @@ def get_hostname(parse):
 	hostname_row = hostname_row[0]
 	hostname = hostname_row.strip()[len("hostname "):] 
 	return hostname
+
+def get_object_item(parse, object_type, object_name):
+	object_item = "+ object " + object_type + " " + object_name
+	#print("zoeken naar " + str(object_item))
+	og_items_processed = 0
+	object_cidr = ''
+	og_children = parse.find_all_children(r'^object ' + object_type + ' ' + object_name, exactmatch=True)
+	#print(og_children)
+	for og_item in og_children:
+		
+			
+		og_item_words = og_item.split()		
+		#Controleren of het een service groep of port-object groep is. Oftewel kunnen er meerdere protocollen zijn, of maar 1. Dit aan de hand van de aantallen worden
+		if og_item_words[0] == 'description':
+			og_items_processed += 1
+		elif og_item_words[0] == 'object':
+			og_items_processed += 1	
+			#eigen regel 	
+		elif og_item_words[0] == 'host':
+			og_items_processed += 1	
+			object_cidr =  og_item_words[1] + '/32'
+		elif og_item_words[0] == 'subnet':
+			og_items_processed += 1	
+			object_cidr =  og_item_words[1] + '/' + str(netmask_to_cidr(og_item_words[2]))
+		else:
+			print(og_item_words[0])
+
+	return object_cidr
+			
 
 def get_nameif_interfaces(parse):
 	interfaces = []
@@ -814,6 +862,16 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 					else:
 						acl_line = ''
 
+				elif acl_line_words[0] == "object":
+					acl_object = get_object_item(parse, 'network', str(acl_line_words[1]))
+					acl_dst_cidr.append(str(acl_object))
+					#print("destination host(s) ", acl_dst_cidr)
+					#Could be the end, only remove if there are more items to split
+					if len(acl_line_words) >2:
+						acl_line = acl_line.split(acl_line_words[0] + ' ',1)[1]
+					else:
+						acl_line = ''
+
 				else:
 					status_update(" NOT FOUND DESTINATION ADDRESS : " + str(acl_line_words[0]) , True, 'warning', debug)
 					parsed_acl_lines -= 1
@@ -836,38 +894,49 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 					elif acl_line_words[0] == "range":
 						range_start = int(replace_port_name_to_number(acl_line_words[1]))
 						range_end = int(replace_port_name_to_number(acl_line_words[2]))
-						try:
-							for i in range(range_start, range_end+1):
-								if acl_protocol == 'tcp':
-									acl_dst_port_tcp.append(i)
-								elif acl_protocol == 'udp':
-									acl_dst_port_udp.append(i)
-								elif acl_protocol == 'icmp':
-									acl_dst_port_icmp.append(i)	
-								else:
-									if acl_dst_port_protocol != '':
-										for item in acl_dst_protocol:
-											if item == 'tcp':
-												acl_dst_port_tcp.append(i)
-											elif item == 'udp':
-												acl_dst_port_udp.append(i)
-											elif item == 'icmp':
-												acl_dst_port_icmp.append(i)	
-											else:
-												print("ERROR! protocol not found")
+						if (EXTRACT_PORT_RANGES):
 
-									else:			
-										print(original_acl_line)
-										print(acl_dst_port_protocol)
-										status_update("ERROR! Destination port RANGE not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
-						except:
+							try:
+								for i in range(range_start, range_end+1):
+									if acl_protocol == 'tcp':
+										acl_dst_port_tcp.append(i)
+									elif acl_protocol == 'udp':
+										acl_dst_port_udp.append(i)
+									elif acl_protocol == 'icmp':
+										acl_dst_port_icmp.append(i)	
+									else:
+										if acl_dst_port_protocol != '':
+											for item in acl_dst_protocol:
+												if item == 'tcp':
+													acl_dst_port_tcp.append(i)
+												elif item == 'udp':
+													acl_dst_port_udp.append(i)
+												elif item == 'icmp':
+													acl_dst_port_icmp.append(i)	
+												else:
+													print("ERROR! protocol not found")
+
+										else:			
+											print(original_acl_line)
+											print(acl_dst_port_protocol)
+											status_update("ERROR! Destination port RANGE not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
+							except:
+								if acl_protocol == 'tcp':
+									acl_dst_port_tcp.append(str(range_start) +"-"+ str(range_end))
+								elif acl_protocol == 'udp':
+									acl_dst_port_udp.append(str(range_start) +"-"+ str(range_end))
+								elif acl_protocol == 'icmp':
+									acl_dst_port_icmp.append(str(range_start) +"-"+ str(range_end))	
+								pass
+						else:
 							if acl_protocol == 'tcp':
 								acl_dst_port_tcp.append(str(range_start) +"-"+ str(range_end))
 							elif acl_protocol == 'udp':
 								acl_dst_port_udp.append(str(range_start) +"-"+ str(range_end))
 							elif acl_protocol == 'icmp':
 								acl_dst_port_icmp.append(str(range_start) +"-"+ str(range_end))	
-							pass
+
+
 					elif acl_line_words[0] == "object-group":
 						og_service_name = acl_line_words[1]
 						acl_dst_port_tcp, acl_dst_port_udp, acl_dst_port_protocol, acl_dst_port_icmp, sub_og_list = get_service_og_items(og_service_name)
@@ -911,38 +980,47 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 						elif acl_line_words[0] == "range":
 							range_start = int(replace_port_name_to_number(acl_line_words[1]))
 							range_end = int(replace_port_name_to_number(acl_line_words[2]))
-							try:
-								for i in range(range_start, range_end+1):
-									if acl_protocol == 'tcp':
-										acl_dst_port_tcp.append(i)
-									elif acl_protocol == 'udp':
-										acl_dst_port_udp.append(i)
-									elif acl_protocol == 'icmp':
-										acl_dst_port_icmp.append(i)	
-									else:
-										if acl_dst_port_protocol != '':
-												for item in acl_dst_protocol:
-													if item == 'tcp':
-														acl_dst_port_tcp.append(i)
-													elif item == 'udp':
-														acl_dst_port_udp.append(i)
-													elif item == 'icmp':
-														acl_dst_port_icmp.append(i)	
-													else:
-														print("ERROR! protocol not found")
+							if (EXTRACT_PORT_RANGES):
 
-										else:			
-											print(original_acl_line)
-											print(acl_dst_port_protocol)
-											status_update("ERROR! Destination port not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
-							except:
+								try:
+									for i in range(range_start, range_end+1):
+										if acl_protocol == 'tcp':
+											acl_dst_port_tcp.append(i)
+										elif acl_protocol == 'udp':
+											acl_dst_port_udp.append(i)
+										elif acl_protocol == 'icmp':
+											acl_dst_port_icmp.append(i)	
+										else:
+											if acl_dst_port_protocol != '':
+													for item in acl_dst_protocol:
+														if item == 'tcp':
+															acl_dst_port_tcp.append(i)
+														elif item == 'udp':
+															acl_dst_port_udp.append(i)
+														elif item == 'icmp':
+															acl_dst_port_icmp.append(i)	
+														else:
+															print("ERROR! protocol not found")
+
+											else:			
+												print(original_acl_line)
+												print(acl_dst_port_protocol)
+												status_update("ERROR! Destination port not combined with protoco list : " + str(acl_protocol) , True, 'critical', debug)
+								except:
+									if acl_protocol == 'tcp':
+										acl_dst_port_tcp.append(str(range_start) +"-"+ str(range_end))
+									elif acl_protocol == 'udp':
+										acl_dst_port_udp.append(str(range_start) +"-"+ str(range_end))
+									elif acl_protocol == 'icmp':
+										acl_dst_port_icmp.append(str(range_start) +"-"+ str(range_end))	
+									pass
+							else:
 								if acl_protocol == 'tcp':
 									acl_dst_port_tcp.append(str(range_start) +"-"+ str(range_end))
 								elif acl_protocol == 'udp':
 									acl_dst_port_udp.append(str(range_start) +"-"+ str(range_end))
 								elif acl_protocol == 'icmp':
-									acl_dst_port_icmp.append(str(range_start) +"-"+ str(range_end))	
-								pass
+									acl_dst_port_icmp.append(str(range_start) +"-"+ str(range_end))									
 						elif acl_line_words[0] == "object-group":
 							og_service_name = acl_line_words[1]
 							acl_dst_port_tcp, acl_dst_port_udp, acl_dst_port_protocol, acl_dst_port_icmp, sub_og_list = get_service_og_items(og_service_name)
