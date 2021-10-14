@@ -10,3 +10,5 @@ test*
 *backup*
 __pycache__
 .DS_Store
+*.log
+/log/*
