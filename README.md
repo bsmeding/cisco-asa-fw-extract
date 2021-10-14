@@ -8,8 +8,9 @@ Requirements
 ============
 
 Python modules:
-* pip install ipaddr
-* pip install CiscoConfParse
+* pip3 install ipaddr
+* pip3 install CiscoConfParse
+* pip3 install pandas
 
 
 Example

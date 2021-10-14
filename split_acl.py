@@ -30,7 +30,7 @@ import pandas as pd
 
 PRINT_REMARKS = False			# True for print to screen, False no print to screen. Default: False
 PRINT_LINES = False 			# Print line info. Default: False
-EXPORT_TYPE = 'excel' 			# Export ACL Lines to 'excel' or to 'csv'. Default: csv
+EXPORT_TYPE = 'csv' 			# Export ACL Lines to 'excel' or to 'csv'. Default: csv
 EXPORT_TO_TABS = True 			# In case of excel, export each ACL to new TAB 
 EXPORT_REMARKS = False 			# Skip the remark lines in export output. Default: False
 EXPORT_ORIGINAL_LINE = True 	# Export the original ACL line (takes longer, and more export data). Default: True
@@ -40,10 +40,10 @@ SHOW_ACL_EXTRACTION = False 	# Show the extraction of each ACL line,(also shown 
 CREATE_DICT = True 				# Maybe remove! Default: True
 #EXPORT_ACL_SEPERATE_FILES = False 	# Export each ACL to separate file
 
-#input_config_file = "confsmall.conf" 
-input_config_file = "ciscoconfig.conf" 
-
+# Path to config files from Cisco ASA
 input_dir = 'conf_input'
+config_files_extensions = [".txt", ".conf", ".config"]
+
 
 #output_csv_file = "acl_seperated.csv"
 output_dir = 'acl_output/'
@@ -170,14 +170,10 @@ def replace_port_name_to_number(name):
 def read_config_files(input_dir):
 	config_files = dict()
 	file_counter = 0
-	# This is the path where you want to search
-	path = input_dir
-	# this is the extension you want to detect
-	#extension = '.confg'
-	extension = ''
+	path = input_dir	
 	for root, dirs_list, files_list in os.walk(path):
 		for file_name in files_list:
-			if os.path.splitext(file_name)[-1] == extension:
+			if os.path.splitext(file_name)[1] in config_files_extensions:
 				file_counter += 1
 				file_name_path = os.path.join(root, file_name)
 				#print(file_name)
@@ -187,8 +183,6 @@ def read_config_files(input_dir):
 	return config_files
 
 
-
-### HIER ONDERR NIEUWE FUNCTIES, BOVENSTAANDE ZIJN BESTAANDE SPLIT_ACL FUNCTIES! NIET WIJZIGEN!!!
 
 def create_og_dict(parse):
 	#Opmaken object dictionary alleen met objects (objet-group is apart) dit gaat PER config en wordt dus alleen met analyze geladen.
@@ -265,10 +259,10 @@ def create_og_dict(parse):
 				# Dit is de regel zelf, die wordt met Children nog een keer weergegeven. Deze wel tellen, maar niets mee doen
 				og_items_processed += 1
 			else:
-				print("ERROR! Geen OG process voor " + str(og_netw_item.text) + " CHILD: " + str(og_item))
+				print("ERROR! No Object-Group proccesses for " + str(og_netw_item.text) + " CHILD: " + str(og_item))
 
 		if og_items_to_process != og_items_processed:
-			print("ERROR! Niet alle regels kunnen processen voor OG " + str(og_netw_item.text))
+			print("ERROR! Couldn't process all rows for object-group " + str(og_netw_item.text))
 
 		
 		og_name = og_name[len("object-group network "):]
@@ -301,7 +295,7 @@ def create_og_dict(parse):
 			port_og = True
 			port_og_protocol = og_name_items[3]
 		if (debug):
-			print("OG NAAM: " + str(og_children[0]))
+			print("OG NAME: " + str(og_children[0]))
 		for og_item in og_children:
 			subnet_cidr = ''
 			host_cidr = ''
@@ -344,7 +338,7 @@ def create_og_dict(parse):
 							udp_ports_list.append(og_port_number)
 							og_items_processed += 1							
 						else:
-							status_update("ERROR! port-object groep gevonden maar geen items! " + str(port_og_protocol) + " port " + str(og_port_number) , False, 'critical', debug)
+							status_update("ERROR! port-object group found but looks empty! " + str(port_og_protocol) + " port " + str(og_port_number) , False, 'critical', debug)
 							
 						#print("port: " + str(og_port) + "( " + acl_dst_port_number + " )")
 					elif og_item_words[1] == 'range':
@@ -370,13 +364,13 @@ def create_og_dict(parse):
 							elif port_og_protocol == 'icmp':
 								icmp_ports_list.append(str(range_start) + "-" + str(range_end))							
 						
-						status_update("Range in " + str(og_name) + " deze uit elkaar halen :" + str(og_item_words[2]) + "-"+ str(og_item_words[3]) , False, 'info', debug)
+						status_update("Range found in " + str(og_name) + " extracting range :" + str(og_item_words[2]) + "-"+ str(og_item_words[3]) , False, 'info', debug)
 							
 					else:
-						status_update("Geen port-objects gevonden voor " +str(og_item_words[1]) , False, 'warning', debug)
+						status_update("No port-objects found for " +str(og_item_words[1]) , False, 'warning', debug)
 
 				else:
-					status_update("ERROR! Wel port-object maar geen og_protocol gevonden" , False, 'critical', debug)
+					status_update("ERROR! port-object found but no protocol found" , False, 'critical', debug)
 			elif og_item_words[0] == 'service-object':
 				#print(og_item)
 				#Service object, deze bevatten zowel protocol als port en evt een range
@@ -433,7 +427,7 @@ def create_og_dict(parse):
 							og_items_processed += 1
 						#print("Range in " + str(og_name) + " deze uit elkaar halen :" + str(range_start) + "-"+ str(range_end))
 					else:
-						print("Geen service-objects gevonden voor " + str(port_og_protocol) + "  in " + str(og_item))
+						print("No service-objects found for " + str(port_og_protocol) + "  in " + str(og_item))
 
 			elif og_item_words[0] == 'group-object':
 				# Dit is de regel zelf, die wordt met Children nog een keer weergegeven. Deze wel tellen, maar niets mee doen
@@ -449,10 +443,10 @@ def create_og_dict(parse):
 				# Dit is de regel zelf, die wordt met Children nog een keer weergegeven. Deze wel tellen, maar niets mee doen
 				og_items_processed += 1
 				if og_item != og_service_item.text:
-					print("andere OG nested: " + str(og_item) + "  in " + str(og_service_item.text) + " og_name: " + str(og_name))
+					print("other OG nested: " + str(og_item) + "  in " + str(og_service_item.text) + " og_name: " + str(og_name))
 
 			else:
-				print("ERROR! Geen og_functie voor child: " + str(og_item_words[0]))
+				print("ERROR! No og_function found for child: " + str(og_item_words[0]))
 				print(og_children)
 
 	for og_protocol_item in og_protocol_items:
@@ -1112,14 +1106,10 @@ def export_acl_dict(hostname, export_dict):
 		df = pd.DataFrame
 		for key, value in export_dict.items():
 			status_update("Export to Excel  : " + str(hostname) + " - acl : " + str(key) , True, 'info', debug)
-			if (EXPORT_TO_TABS):
-				#pprint(value)
-				df = pd.DataFrame.from_dict(value, orient='index')
-				df.to_excel(writer,key)
-			else:
-				df2 = pd.DataFrame.from_dict(value, orient='index')
-				print("Export to single tab, combine all ACLs")
-				#df.insert(0, 'Name', 'abc')
+			#pprint(value)
+			df = pd.DataFrame.from_dict(value, orient='index')
+			df.to_excel(writer,key)
+
 
 		writer.save()
 	else:
@@ -1188,7 +1178,7 @@ def main():
 	# Get al ACL_input files
 	config_files = dict()
 	config_files = read_config_files(input_dir)
-	#print(config_files)
+	print(config_files)
 
 	# Create global dict with portname to number, only if enabled for extraction
 	global portDict
@@ -1206,7 +1196,7 @@ def main():
 		# Read in config
 		status_update("Read config file : " + str(value[u'file_name']) , True, 'info', True)
 		parse = parseconfig(value['file_path'])
-		#pprint(parse)	
+		pprint(parse)	
 		global og_dict
 		og_dict = dict()
 		og_dict = create_og_dict(parse)
