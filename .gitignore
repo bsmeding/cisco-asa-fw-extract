@@ -1,9 +1,9 @@
 ./*.csv
 /acl_output/*
-/conf_input/*
+/conf_input/*.txt
+/conf_input/*.conf
+/conf_input/*.config
 /input/*
->>>>>>> dev
-/old/*
 *.pyc
 *.conf
 test*
