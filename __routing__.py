@@ -36,8 +36,8 @@ def get_network_routes(parse, ReturnReversed):
 			new_acl_dict_line = {'network_route_host_id': network_route_host_id, 'network_route_subnet_id': network_route_subnet_id, 'network_route_subnet_cidr': network_route_subnet_cidr, \
 				'network_route_next_hop': network_route_next_hop, 'network_route_exit_intf': network_route_exit_intf, 'network_route_priority': network_route_priority}
 			dict_network_routes[cfg_line_number] = new_acl_dict_line
-		else:
-			print("ERROR! Unsupported route table entry : " + network_route.text)
+#		else:
+#			print("ERROR! Unsupported route table entry : " + network_route.text)
 	
 	#Order the returning dict		
 	#dict_network_routes = OrderedDict(sorted(dict_network_routes.items(), key=lambda kv: kv[1]['network_route_subnet_cidr']))

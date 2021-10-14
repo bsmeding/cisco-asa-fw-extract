@@ -30,7 +30,7 @@ import pandas as pd
 
 PRINT_REMARKS = False			# True for print to screen, False no print to screen. Default: False
 PRINT_LINES = False 			# Print line info. Default: False
-EXPORT_TYPE = 'csv' 			# Export ACL Lines to 'excel' or to 'csv'. Default: csv
+EXPORT_TYPE = 'excel' 			# Export ACL Lines to 'excel' or to 'csv'. Default: csv
 EXPORT_TO_TABS = True 			# In case of excel, export each ACL to new TAB 
 EXPORT_REMARKS = False 			# Skip the remark lines in export output. Default: False
 EXPORT_ORIGINAL_LINE = True 	# Export the original ACL line (takes longer, and more export data). Default: True
@@ -209,13 +209,13 @@ def create_og_dict(parse):
 		#print(og_netw_item.text)
 		og_rows_processed += 1
 		#leeg maken lijsten voor export
-		network_objects = list()								# Alle netwerk objecten (host en subnets)
+		network_objects = list()								# All network objects (host en subnets)
 		sub_og_list = list()									# Nested object-groups in list form
 		if (debug):
 			print("OG_ROW_PROCESSING : ", og_rows_processed)
 		og_children = parse.find_all_children(og_netw_item.text, exactmatch=True)
-		og_items_to_process = len(og_children)					# Voor validatie dat we alle regels processen
-		og_items_processed = 0									# Nu op 0 zetten, per regel ophoven en aan einde van de loop controleren of even veel is
+		og_items_to_process = len(og_children)					# For validation, check if we process al rows
+		og_items_processed = 0									# When starting, begin by zero
 		# In OG_children zit ook de OG naam
 		og_name = og_children[0]
 		if (og_children[0] == 'DM_INLINE_SERVICE_19'):
@@ -248,7 +248,7 @@ def create_og_dict(parse):
 				if (debug):
 					print("HOST IP " + str(host_cidr))
 			elif og_item_words[0] == 'group-object':
-				# Dit is de regel zelf, die wordt met Children nog een keer weergegeven. Deze wel tellen, maar niets mee doen
+				# This is the OG_row, with childere same row is shown at first. Count this one but no processing
 				og_items_processed += 1
 				nested_og_type = og_item_words[1]
 				if (debug):
@@ -256,7 +256,7 @@ def create_og_dict(parse):
 					print(len(og_item_words))
 				sub_og_list.append(og_item_words[1])
 			elif og_item_words[0] == 'object-group':
-				# Dit is de regel zelf, die wordt met Children nog een keer weergegeven. Deze wel tellen, maar niets mee doen
+				# This is the OG_row, with childere same row is shown at first. Count this one but no processing
 				og_items_processed += 1
 			else:
 				print("ERROR! No Object-Group proccesses for " + str(og_netw_item.text) + " CHILD: " + str(og_item))
@@ -271,7 +271,7 @@ def create_og_dict(parse):
 		og_dict[og_name]={'og_type': 'network', 'desciption': o_item_desc, 'network_objects_list': network_objects, 'service_tcp_ports_list': tcp_ports_list,  'service_udp_ports_list': udp_ports_list, 'service_protocol_only_list': protocol_only_list, 'service_icmp_ports_list': icmp_ports_list,'sub_og_list': sub_og_list}
 
 
-	# Nu services object-groups
+	# Now services object-groups
 	for og_service_item in og_service_items:
 		#print(og_service_item.text)
 		og_rows_processed += 1
@@ -285,9 +285,9 @@ def create_og_dict(parse):
 		if (debug):
 			print("OG_ROW_PROCESSING : ", og_rows_processed)
 		og_children = parse.find_all_children(og_service_item.text, exactmatch=True)
-		og_items_to_process = len(og_children)					# Voor validatie dat we alle regels processen
-		og_items_processed = 0									# Nu op 0 zetten, per regel ophoven en aan einde van de loop controleren of even veel is
-		# In OG_children zit ook de OG naam
+		og_items_to_process = len(og_children)					# For validation, check if we process al rows
+		og_items_processed = 0									# When starting, begin by zero
+		# In OG_children are also OG_name
 		og_name = og_children[0]
 		og_name_items = og_name.split()
 		port_og = False
@@ -1089,8 +1089,9 @@ def get_acl_lines(parse, total_acl_lines, acl_name, acl_interface, acl_direction
 def export_acl_dict(hostname, export_dict):
 	global output_dir
 	export_dir = os.path.join(output_dir, '')
-	export_file = export_dir + hostname + '-all_acl_lines.xlsx'
+	export_file = export_dir + hostname + '-all_acl_lines'
 	#print("Start export of ACL for device  " + str(hostname) + " to " + str(export_file))
+	pprint(export_dict)
 	#Delete file if exist
 	if not os.path.exists(export_dir):
 		os.makedirs(export_dir)
@@ -1101,8 +1102,8 @@ def export_acl_dict(hostname, export_dict):
 		except OSError:
 			pass
 
-	if (EXPORT_TYPE == 'excel'):
-		writer = pd.ExcelWriter(export_file)
+	if (EXPORT_TYPE == 'excel') and len(export_dict)>1:
+		writer = pd.ExcelWriter(export_file + '.xlsx')
 		df = pd.DataFrame
 		for key, value in export_dict.items():
 			status_update("Export to Excel  : " + str(hostname) + " - acl : " + str(key) , True, 'info', debug)
@@ -1114,6 +1115,11 @@ def export_acl_dict(hostname, export_dict):
 		writer.save()
 	else:
 		print("Export to CSV")
+		with open(export_file + '.csv', 'w') as f:  
+			w = csv.DictWriter(f, export_dict.keys())
+			w.writeheader()
+			w.writerow(export_dict)
+		
 
 def extract_asa_config_file(parse):
 
@@ -1122,7 +1128,6 @@ def extract_asa_config_file(parse):
 	global hostname
 	hostname = ''
 	hostname = get_hostname(parse)
-
 
 	# Create global dict with all acl lines
 	global extracted_acl_lines
@@ -1136,7 +1141,7 @@ def extract_asa_config_file(parse):
 	total_acl_lines = 0
 	#Loop trough interfaces and return extracted ACL lines
 	for key, value in all_intfs.items():
-		#print(key, value)
+		print(key, value)
 		
 		## START ACL_IN EXTRACTION
 		parsed_remark_lines = 0
